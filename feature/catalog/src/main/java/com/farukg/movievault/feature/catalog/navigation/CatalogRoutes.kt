@@ -1,7 +1,8 @@
 package com.farukg.movievault.feature.catalog.navigation
 
+import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 
-@Serializable object CatalogRoute
+@Serializable data object CatalogRoute : NavKey
 
-@Serializable data class DetailRoute(val movieId: Long)
+@Serializable data class DetailRoute(val movieId: Long) : NavKey
