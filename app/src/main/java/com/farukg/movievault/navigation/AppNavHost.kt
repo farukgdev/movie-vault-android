@@ -9,10 +9,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.farukg.movievault.feature.catalog.navigation.CatalogRoute
 import com.farukg.movievault.feature.catalog.navigation.DetailRoute
-import com.farukg.movievault.feature.catalog.ui.CatalogScreen
-import com.farukg.movievault.feature.catalog.ui.DetailScreen
+import com.farukg.movievault.feature.catalog.ui.CatalogRouteScreen
+import com.farukg.movievault.feature.catalog.ui.DetailRouteScreen
 import com.farukg.movievault.feature.favorites.navigation.FavoritesRoute
-import com.farukg.movievault.feature.favorites.ui.FavoritesScreen
+import com.farukg.movievault.feature.favorites.ui.FavoritesRouteScreen
 
 @Composable
 fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) {
@@ -20,16 +20,20 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
 
     NavHost(navController = navController, startDestination = CatalogRoute, modifier = modifier) {
         composable<CatalogRoute> {
-            CatalogScreen(
-                onOpenDetail = { id -> navController.navigate(DetailRoute(id)) },
-                onOpenFavorites = { navController.navigate(FavoritesRoute) },
+            CatalogRouteScreen(
+                onOpenDetail = { id ->
+                    navController.navigate(DetailRoute(id)) { launchSingleTop = true }
+                },
+                onOpenFavorites = {
+                    navController.navigate(FavoritesRoute) { launchSingleTop = true }
+                },
                 modifier = screenModifier,
             )
         }
 
         composable<DetailRoute> { backStackEntry ->
             val args = backStackEntry.toRoute<DetailRoute>()
-            DetailScreen(
+            DetailRouteScreen(
                 movieId = args.movieId,
                 onBack = { navController.popBackStack() },
                 modifier = screenModifier,
@@ -37,7 +41,10 @@ fun AppNavHost(navController: NavHostController, modifier: Modifier = Modifier) 
         }
 
         composable<FavoritesRoute> {
-            FavoritesScreen(onBack = { navController.popBackStack() }, modifier = screenModifier)
+            FavoritesRouteScreen(
+                onBack = { navController.popBackStack() },
+                modifier = screenModifier,
+            )
         }
     }
 }
