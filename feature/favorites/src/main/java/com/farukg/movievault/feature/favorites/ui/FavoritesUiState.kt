@@ -8,4 +8,8 @@ sealed interface FavoritesUiState {
     data class Error(val error: AppError) : FavoritesUiState
 
     data object Empty : FavoritesUiState
+
+    data class Content(val movies: List<FavoriteRowUi>) : FavoritesUiState
 }
+
+data class FavoriteRowUi(val id: Long, val title: String, val subtitle: String)

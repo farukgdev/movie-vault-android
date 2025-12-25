@@ -1,13 +1,20 @@
 package com.farukg.movievault.feature.favorites.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
+import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +33,7 @@ fun FavoritesScreen(
     uiState: FavoritesUiState,
     onRetry: () -> Unit,
     onBack: () -> Unit,
+    onOpenDetail: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
 
@@ -66,6 +74,39 @@ fun FavoritesScreen(
                     title = "No favorites yet",
                     message = "Tap the heart on a movie to save it here.",
                 )
+            is FavoritesUiState.Content -> {
+                LazyColumn(modifier = bodyModifier) {
+                    items(uiState.movies, key = { it.id }) { movie ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth().clickable { onOpenDetail(movie.id) }
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = movie.title,
+                                        style = MaterialTheme.typography.titleMedium,
+                                    )
+                                    if (movie.subtitle.isNotBlank()) {
+                                        Spacer(Modifier.height(2.dp))
+                                        Text(
+                                            text = movie.subtitle,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                                    contentDescription = null,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

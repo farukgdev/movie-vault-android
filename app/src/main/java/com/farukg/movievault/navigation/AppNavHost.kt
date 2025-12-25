@@ -3,7 +3,6 @@ package com.farukg.movievault.navigation
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -27,8 +26,8 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.farukg.movievault.feature.catalog.navigation.CatalogRoute
 import com.farukg.movievault.feature.catalog.navigation.DetailRoute
-import com.farukg.movievault.feature.catalog.ui.CatalogRouteScreen
-import com.farukg.movievault.feature.catalog.ui.DetailRouteScreen
+import com.farukg.movievault.feature.catalog.ui.catalog.CatalogRouteScreen
+import com.farukg.movievault.feature.catalog.ui.detail.DetailRouteScreen
 import com.farukg.movievault.feature.favorites.navigation.FavoritesRoute
 import com.farukg.movievault.feature.favorites.ui.FavoritesRouteScreen
 
@@ -124,11 +123,10 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                     ReportResumed(FavoritesRoute, navigator)
                     FavoritesRouteScreen(
                         onBack = { navigator.onBackPressed() },
+                        onOpenDetail = { id -> navigator.openDetail(id) },
                         modifier = screenModifier,
                     )
                 }
             },
     )
 }
-
-val BreatheInEasing = CubicBezierEasing(0.4f, 0f, 1f, 1f)

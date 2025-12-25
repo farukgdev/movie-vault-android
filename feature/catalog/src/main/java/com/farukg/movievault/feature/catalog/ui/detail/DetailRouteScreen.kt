@@ -1,25 +1,25 @@
-package com.farukg.movievault.feature.favorites.ui
+package com.farukg.movievault.feature.catalog.ui.detail
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
-fun FavoritesRouteScreen(
-    onBack: () -> Unit,
-    onOpenDetail: (Long) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val viewModel: FavoritesViewModel = hiltViewModel()
+fun DetailRouteScreen(movieId: Long, onBack: () -> Unit, modifier: Modifier = Modifier) {
+    val viewModel: DetailViewModel = hiltViewModel()
+
+    LaunchedEffect(movieId) { viewModel.setMovieId(movieId) }
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    FavoritesScreen(
+    DetailScreen(
         uiState = uiState,
         onRetry = viewModel::retry,
         onBack = onBack,
-        onOpenDetail = onOpenDetail,
+        onToggleFavorite = viewModel::toggleFavorite,
         modifier = modifier,
     )
 }
