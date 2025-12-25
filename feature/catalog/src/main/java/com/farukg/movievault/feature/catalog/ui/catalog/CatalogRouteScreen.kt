@@ -1,4 +1,4 @@
-package com.farukg.movievault.feature.favorites.ui
+package com.farukg.movievault.feature.catalog.ui.catalog
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -7,19 +7,19 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Composable
-fun FavoritesRouteScreen(
-    onBack: () -> Unit,
-    onOpenDetail: (Long) -> Unit,
+fun CatalogRouteScreen(
+    onOpenDetail: (movieId: Long) -> Unit,
+    onOpenFavorites: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val viewModel: FavoritesViewModel = hiltViewModel()
+    val viewModel: CatalogViewModel = hiltViewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    FavoritesScreen(
+    CatalogScreen(
         uiState = uiState,
         onRetry = viewModel::retry,
-        onBack = onBack,
         onOpenDetail = onOpenDetail,
+        onOpenFavorites = onOpenFavorites,
         modifier = modifier,
     )
 }

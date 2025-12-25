@@ -1,4 +1,4 @@
-package com.farukg.movievault.feature.catalog.ui
+package com.farukg.movievault.feature.catalog.ui.catalog
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
