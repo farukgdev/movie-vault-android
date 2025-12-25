@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.EmptyState
 import com.farukg.movievault.core.ui.ErrorState
 import com.farukg.movievault.core.ui.LoadingState
@@ -53,7 +54,11 @@ fun FavoritesScreen(
                 LoadingState(modifier = bodyModifier, message = "Loading favorites...")
 
             is FavoritesUiState.Error ->
-                ErrorState(modifier = bodyModifier, message = uiState.message, onRetry = onRetry)
+                ErrorState(
+                    modifier = bodyModifier,
+                    message = uiState.error.userMessage(),
+                    onRetry = onRetry,
+                )
 
             FavoritesUiState.Empty ->
                 EmptyState(
