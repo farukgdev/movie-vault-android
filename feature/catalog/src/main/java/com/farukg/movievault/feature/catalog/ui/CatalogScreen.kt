@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.EmptyState
 import com.farukg.movievault.core.ui.ErrorState
 import com.farukg.movievault.core.ui.LoadingState
@@ -67,7 +68,11 @@ fun CatalogScreen(
                 LoadingState(modifier = bodyModifier, message = "Loading catalog...")
 
             is CatalogUiState.Error ->
-                ErrorState(modifier = bodyModifier, message = uiState.message, onRetry = onRetry)
+                ErrorState(
+                    modifier = bodyModifier,
+                    message = uiState.error.userMessage(),
+                    onRetry = onRetry,
+                )
 
             CatalogUiState.Empty ->
                 EmptyState(
