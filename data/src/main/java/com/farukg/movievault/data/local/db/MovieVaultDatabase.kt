@@ -13,7 +13,6 @@ import com.farukg.movievault.data.local.entity.MovieEntity
 @Database(
     entities = [MovieEntity::class, FavoriteEntity::class, CacheMetadataEntity::class],
     version = 2,
-    exportSchema = true,
 )
 @TypeConverters(RoomConverters::class)
 abstract class MovieVaultDatabase : RoomDatabase() {
