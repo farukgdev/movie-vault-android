@@ -2,8 +2,10 @@ package com.farukg.movievault.data.di
 
 import android.content.Context
 import androidx.room.Room
+import com.farukg.movievault.data.local.dao.CacheMetadataDao
 import com.farukg.movievault.data.local.dao.FavoriteDao
 import com.farukg.movievault.data.local.dao.MovieDao
+import com.farukg.movievault.data.local.db.MIGRATION_1_2
 import com.farukg.movievault.data.local.db.MovieVaultDatabase
 import dagger.Module
 import dagger.Provides
@@ -19,7 +21,12 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): MovieVaultDatabase =
-        Room.databaseBuilder(context, MovieVaultDatabase::class.java, "movievault.db").build()
+        Room.databaseBuilder(context, MovieVaultDatabase::class.java, "movievault.db")
+            .addMigrations(MIGRATION_1_2)
+            .build()
+
+    @Provides
+    fun provideCacheMetadataDao(db: MovieVaultDatabase): CacheMetadataDao = db.cacheMetadataDao()
 
     @Provides fun provideMovieDao(db: MovieVaultDatabase): MovieDao = db.movieDao()
 
