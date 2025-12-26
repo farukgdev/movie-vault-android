@@ -3,9 +3,12 @@ package com.farukg.movievault.data.repository.room
 import androidx.room.withTransaction
 import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.result.AppResult
+import com.farukg.movievault.data.cache.CacheKeys
+import com.farukg.movievault.data.local.dao.CacheMetadataDao
 import com.farukg.movievault.data.local.dao.FavoriteDao
 import com.farukg.movievault.data.local.dao.MovieDao
 import com.farukg.movievault.data.local.db.MovieVaultDatabase
+import com.farukg.movievault.data.local.entity.CacheMetadataEntity
 import com.farukg.movievault.data.local.entity.MovieEntity
 import com.farukg.movievault.data.local.mapper.hasDetailFields
 import com.farukg.movievault.data.local.mapper.toDomainDetail
@@ -32,6 +35,7 @@ constructor(
     private val db: MovieVaultDatabase,
     private val movieDao: MovieDao,
     private val favoriteDao: FavoriteDao,
+    private val cacheMetadataDao: CacheMetadataDao,
     private val remote: CatalogRemoteDataSource,
 ) : CatalogRepository {
 
@@ -95,23 +99,32 @@ constructor(
     }
 
     private suspend fun ensureCatalogSeededIfEmpty(): AppResult<Unit> =
-        seedMutex.withLock {
-            if (movieDao.countMovies() > 0) return AppResult.Success(Unit)
+        withContext(Dispatchers.IO) {
+            seedMutex.withLock {
+                if (movieDao.countMovies() > 0) return@withLock AppResult.Success(Unit)
 
-            when (val remoteResult = remote.fetchPopular(page = 1)) {
-                is AppResult.Error -> remoteResult
-                is AppResult.Success -> {
-                    val incoming = remoteResult.data
+                when (val remoteResult = remote.fetchPopular(page = 1)) {
+                    is AppResult.Error -> remoteResult
+                    is AppResult.Success -> {
+                        val incoming = remoteResult.data
 
-                    db.withTransaction {
-                        val entities =
-                            incoming.mapIndexed { index, movie ->
-                                movie.toEntity(popularRank = index)
-                            }
-                        movieDao.upsertAll(entities)
+                        db.withTransaction {
+                            val entities =
+                                incoming.mapIndexed { index, movie ->
+                                    movie.toEntity(popularRank = index)
+                                }
+                            movieDao.upsertAll(entities)
+
+                            cacheMetadataDao.upsert(
+                                CacheMetadataEntity(
+                                    key = CacheKeys.CATALOG_LAST_UPDATED,
+                                    lastUpdatedEpochMillis = System.currentTimeMillis(),
+                                )
+                            )
+                        }
+
+                        AppResult.Success(Unit)
                     }
-
-                    AppResult.Success(Unit)
                 }
             }
         }
