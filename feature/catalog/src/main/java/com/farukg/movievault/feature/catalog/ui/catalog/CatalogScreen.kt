@@ -21,14 +21,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CloudDone
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.SyncProblem
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SnackbarData
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -40,33 +45,38 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.EmptyState
 import com.farukg.movievault.core.ui.ErrorState
-import com.farukg.movievault.core.ui.LoadingState
-import com.farukg.movievault.data.repository.CatalogRefreshState
+import kotlin.math.max
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CatalogScreen(
     uiState: CatalogUiState,
-    refreshState: CatalogRefreshState,
+    statusUi: CatalogStatusUi,
     refreshEvents: Flow<AppError>,
     isManualRefreshing: Boolean,
     onRetry: () -> Unit,
@@ -77,7 +87,12 @@ fun CatalogScreen(
 ) {
     val pullState = rememberPullToRefreshState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val isRefreshingUi = rememberMinManualRefreshIndicatorDuration(isManualRefreshing)
+
+    val manualRefreshingUi = rememberMinManualRefreshIndicatorDuration(isManualRefreshing)
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    var showStatusSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(refreshEvents) {
         refreshEvents.collectLatest { err ->
@@ -88,17 +103,18 @@ fun CatalogScreen(
                     withDismissAction = true,
                     duration = SnackbarDuration.Short,
                 )
-
             if (result == SnackbarResult.ActionPerformed) onRefresh()
         }
     }
+
     Box(modifier = modifier.fillMaxSize()) {
         Column(
-            modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             TopBar(
-                lastUpdatedEpochMillis = refreshState.lastUpdatedEpochMillis,
+                statusUi = statusUi,
+                onOpenStatus = { showStatusSheet = true },
                 onOpenFavorites = onOpenFavorites,
             )
 
@@ -106,13 +122,13 @@ fun CatalogScreen(
 
             PullToRefreshBox(
                 modifier = bodyModifier,
-                isRefreshing = isRefreshingUi,
+                isRefreshing = manualRefreshingUi,
                 onRefresh = { if (!isManualRefreshing) onRefresh() },
                 state = pullState,
                 indicator = {
                     PullToRefreshDefaults.Indicator(
                         state = pullState,
-                        isRefreshing = isRefreshingUi,
+                        isRefreshing = manualRefreshingUi,
                         modifier = Modifier.align(Alignment.TopCenter),
                     )
                 },
@@ -124,9 +140,7 @@ fun CatalogScreen(
                 ) {
                     when (uiState) {
                         CatalogUiState.Loading -> {
-                            item {
-                                FullScreenCentered { LoadingState(message = "Loading catalog...") }
-                            }
+                            item { Spacer(Modifier.fillParentMaxSize()) }
                         }
 
                         is CatalogUiState.Error -> {
@@ -141,27 +155,23 @@ fun CatalogScreen(
                         }
 
                         CatalogUiState.Empty -> {
-                            val hasNeverUpdated = refreshState.lastUpdatedEpochMillis == null
-                            val initialFailure =
-                                hasNeverUpdated && refreshState.lastRefreshError != null
-                            val initialLoading =
-                                hasNeverUpdated && refreshState.lastRefreshError == null
+                            val isBootstrapping =
+                                statusUi.lastUpdatedEpochMillis == null && statusUi.error == null
 
                             item {
                                 FullScreenCentered {
                                     when {
-                                        initialLoading ->
-                                            LoadingState(message = "Loading catalog...")
-
-                                        initialFailure -> {
-                                            val err = refreshState.lastRefreshError
+                                        isBootstrapping ->
+                                            Text(
+                                                text = "Loading catalog...",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        statusUi.error != null ->
                                             ErrorState(
-                                                message =
-                                                    err?.userMessage() ?: "Something went wrong.",
+                                                message = statusUi.error.userMessage(),
                                                 onRetry = onRetry,
                                             )
-                                        }
-
                                         else ->
                                             EmptyState(
                                                 title = "No movies yet",
@@ -190,66 +200,223 @@ fun CatalogScreen(
 
         SnackbarHost(
             hostState = snackbarHostState,
-            Modifier.align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier =
+                Modifier.align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
         ) { data ->
             MovieVaultSnackbar(data = data, modifier = Modifier.fillMaxWidth())
+        }
+    }
+
+    if (showStatusSheet) {
+        ModalBottomSheet(onDismissRequest = { showStatusSheet = false }, sheetState = sheetState) {
+            StatusSheetContent(
+                statusUi = statusUi,
+                onRefreshNow = {
+                    onRefresh()
+                    scope.launch {
+                        sheetState.hide()
+                        showStatusSheet = false
+                    }
+                },
+                onDismiss = {
+                    scope.launch {
+                        sheetState.hide()
+                        showStatusSheet = false
+                    }
+                },
+            )
         }
     }
 }
 
 @Composable
 private fun TopBar(
-    lastUpdatedEpochMillis: Long?,
+    statusUi: CatalogStatusUi,
+    onOpenStatus: () -> Unit,
     onOpenFavorites: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(text = "MovieVault", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            text = "MovieVault",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.weight(1f),
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            StatusIconButton(statusUi = statusUi, onClick = onOpenStatus)
 
-            if (lastUpdatedEpochMillis != null) {
-                val updatedText = rememberRelativeUpdatedText(lastUpdatedEpochMillis)
-                Text(
-                    text = updatedText,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            IconButton(onClick = onOpenFavorites) {
+                Icon(imageVector = Icons.Outlined.FavoriteBorder, contentDescription = "Favorites")
             }
-        }
-
-        IconButton(onClick = onOpenFavorites) {
-            Icon(imageVector = Icons.Outlined.FavoriteBorder, contentDescription = "Favorites")
         }
     }
 }
 
 @Composable
-private fun rememberRelativeUpdatedText(lastUpdatedEpochMillis: Long): String {
-    var now by remember(lastUpdatedEpochMillis) { mutableLongStateOf(System.currentTimeMillis()) }
+private fun rememberRelativeUpdatedTextSmart(lastUpdatedEpochMillis: Long?): String {
+    if (lastUpdatedEpochMillis == null) return "Last updated: Never"
 
-    LaunchedEffect(lastUpdatedEpochMillis) {
-        while (true) {
-            val current = System.currentTimeMillis()
-            val age = current - lastUpdatedEpochMillis
-            now = current
+    val now by
+        produceState(initialValue = System.currentTimeMillis(), key1 = lastUpdatedEpochMillis) {
+            while (true) {
+                val current = System.currentTimeMillis()
+                value = current
 
-            val delayMs = if (age < 60_000L) 1_000L else 60_000L - (current % 60_000L)
-            delay(delayMs)
+                val ageMs = current - lastUpdatedEpochMillis
+
+                val delayMs =
+                    if (ageMs < 60_000L) {
+                        60_000L - max(ageMs, 0L)
+                    } else {
+                        60_000L - (current % 60_000L)
+                    }
+
+                delay(delayMs.coerceAtLeast(1L))
+            }
         }
-    }
 
-    val age = now - lastUpdatedEpochMillis
-    return if (age < 60_000L) {
+    val ageMs = now - lastUpdatedEpochMillis
+    return if (ageMs < 60_000L) {
         "Updated just now"
     } else {
-        "Updated " +
+        "Last updated: " +
             DateUtils.getRelativeTimeSpanString(
                 lastUpdatedEpochMillis,
                 now,
                 DateUtils.MINUTE_IN_MILLIS,
             )
+    }
+}
+
+private data class StatusPresentation(val contentDescription: String, val headline: String)
+
+private fun CatalogStatusUi.toPresentation(): StatusPresentation {
+    val contentDescription =
+        when (icon) {
+            CatalogStatusIcon.BackgroundRefreshing -> "Status: refreshing"
+            CatalogStatusIcon.Offline -> "Status: offline"
+            CatalogStatusIcon.Error -> "Status: issue"
+            CatalogStatusIcon.Ok -> "Status: up to date"
+        }
+
+    val headline =
+        when {
+            isRefreshing -> "Refreshing..."
+            icon == CatalogStatusIcon.Offline -> "Offline"
+            icon == CatalogStatusIcon.Error -> {
+                when (errorOrigin) {
+                    RefreshOrigin.Automatic -> "Background refresh failed"
+                    RefreshOrigin.Manual -> "Your refresh failed"
+                    null -> "Refresh failed"
+                }
+            }
+            else -> "Up to date"
+        }
+
+    return StatusPresentation(contentDescription = contentDescription, headline = headline)
+}
+
+@Composable
+private fun StatusIconButton(
+    statusUi: CatalogStatusUi,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val presentation = statusUi.toPresentation()
+    val cd = presentation.contentDescription
+
+    Surface(
+        modifier = modifier.clip(RoundedCornerShape(12.dp)),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.size(34.dp).semantics { contentDescription = cd },
+        ) {
+            when (statusUi.icon) {
+                CatalogStatusIcon.BackgroundRefreshing -> {
+                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                }
+
+                CatalogStatusIcon.Offline -> {
+                    Icon(
+                        imageVector = Icons.Outlined.CloudOff,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                CatalogStatusIcon.Error -> {
+                    Icon(
+                        imageVector = Icons.Outlined.SyncProblem,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
+
+                CatalogStatusIcon.Ok -> {
+                    Icon(
+                        imageVector = Icons.Outlined.CloudDone,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusSheetContent(
+    statusUi: CatalogStatusUi,
+    onRefreshNow: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        val hasProblem = statusUi.error != null
+
+        val presentation = statusUi.toPresentation()
+        Text(text = presentation.headline, style = MaterialTheme.typography.titleLarge)
+
+        statusUi.error?.let { err ->
+            Text(
+                text = err.userMessage(),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Text(
+            text = rememberRelativeUpdatedTextSmart(statusUi.lastUpdatedEpochMillis),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        val primaryActionLabel = if (hasProblem) "Try again" else "Refresh now"
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onRefreshNow) { Text(primaryActionLabel) }
+        }
+
+        Spacer(Modifier.height(6.dp))
     }
 }
 
@@ -380,5 +547,5 @@ private fun AppError.toRefreshSnackbarMessage(): String =
         is AppError.Network -> "Network error"
         is AppError.Http -> "Server error"
         is AppError.Serialization -> "Bad response"
-        is AppError.Unknown -> "Couldn’t refresh"
+        is AppError.Unknown -> "Couldn't refresh"
     }

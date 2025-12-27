@@ -30,12 +30,12 @@ fun CatalogRouteScreen(
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val refreshState by viewModel.refreshState.collectAsStateWithLifecycle()
+    val statusUi by viewModel.statusUi.collectAsStateWithLifecycle()
     val manualRefreshing by viewModel.manualRefreshing.collectAsStateWithLifecycle()
 
     CatalogScreen(
         uiState = uiState,
-        refreshState = refreshState,
+        statusUi = statusUi,
         refreshEvents = viewModel.refreshEvents,
         isManualRefreshing = manualRefreshing,
         onRetry = viewModel::retry,
