@@ -10,6 +10,7 @@ import com.farukg.movievault.data.repository.CatalogRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -17,9 +18,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 
 @HiltViewModel
 class CatalogViewModel @Inject constructor(private val repository: CatalogRepository) :
@@ -29,7 +35,22 @@ class CatalogViewModel @Inject constructor(private val repository: CatalogReposi
     val refreshEvents: SharedFlow<AppError> = _refreshEvents.asSharedFlow()
 
     private val _manualRefreshing = MutableStateFlow(false)
-    val manualRefreshing = _manualRefreshing.asStateFlow()
+    val manualRefreshing: StateFlow<Boolean> = _manualRefreshing.asStateFlow()
+
+    private data class LastFailure(val error: AppError, val origin: RefreshOrigin, val at: Long)
+
+    private data class RefreshLog(
+        val lastSuccessAt: Long? = null,
+        val lastFailure: LastFailure? = null,
+    )
+
+    private val _refreshLog = MutableStateFlow(RefreshLog())
+
+    private val _showBackgroundSpinnerInTopBar = MutableStateFlow(false)
+    private val showBackgroundSpinnerInTopBar: StateFlow<Boolean> =
+        _showBackgroundSpinnerInTopBar.asStateFlow()
+
+    private val bgMutex = Mutex()
 
     private var lastResumeRefreshAtEpochMillis: Long = 0L
     private val resumeRefreshThrottleMs: Long = 30_000L
@@ -61,37 +82,179 @@ class CatalogViewModel @Inject constructor(private val repository: CatalogReposi
                 ),
             )
 
+    val statusUi: StateFlow<CatalogStatusUi> =
+        combine(refreshState, _refreshLog, showBackgroundSpinnerInTopBar, manualRefreshing) {
+                rs,
+                log,
+                showBgSpinner,
+                isManualRefreshing ->
+                buildCatalogStatusUi(
+                    refreshState = rs,
+                    log = log,
+                    showBackgroundSpinnerInTopBar = showBgSpinner,
+                    isManualRefreshing = isManualRefreshing,
+                )
+            }
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                CatalogStatusUi(
+                    lastUpdatedEpochMillis = null,
+                    icon = CatalogStatusIcon.Ok,
+                    error = null,
+                    errorOrigin = null,
+                    isRefreshing = false,
+                ),
+            )
+
     init {
-        // Background refresh, don't show snackbars on failure
-        viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            repository.refreshCatalog(force = false)
-        }
+        startTopBarSpinnerController()
+        viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) { runBackgroundRefresh() }
     }
 
-    // User-initiated refresh: show failures via snackbar events
+    fun onResumed() {
+        val now = System.currentTimeMillis()
+        if (now - lastResumeRefreshAtEpochMillis < resumeRefreshThrottleMs) return
+        lastResumeRefreshAtEpochMillis = now
+        viewModelScope.launch { runBackgroundRefresh() }
+    }
+
     fun onUserRefresh() {
         viewModelScope.launch {
             _manualRefreshing.value = true
-            when (val result = repository.refreshCatalog(force = true)) {
-                is AppResult.Success -> Unit
-                is AppResult.Error -> _refreshEvents.tryEmit(result.error)
+            _showBackgroundSpinnerInTopBar.value = false
+
+            val result = repository.refreshCatalog(force = true)
+            val at = System.currentTimeMillis()
+
+            when (result) {
+                is AppResult.Success -> {
+                    recordSuccess(at)
+                }
+                is AppResult.Error -> {
+                    recordFailure(result.error, RefreshOrigin.Manual, at)
+                    _refreshEvents.tryEmit(result.error)
+                }
             }
+
             _manualRefreshing.value = false
         }
     }
 
     fun retry() = onUserRefresh()
 
-    // Background refresh, don't show snackbars on failure
-    fun onResumed() {
-        val now = System.currentTimeMillis()
-        if (now - lastResumeRefreshAtEpochMillis < resumeRefreshThrottleMs) return
-        lastResumeRefreshAtEpochMillis = now
+    private fun startTopBarSpinnerController() {
+        // don't show immediately (avoid flicker)
+        val showDelayMs = 150L
+        val minVisibleMs = 500L
 
-        // Policy-driven: safe to call often.
-        viewModelScope.launch { repository.refreshCatalog(force = false) }
+        viewModelScope.launch {
+            var shownAt = 0L
+
+            combine(refreshState, manualRefreshing) { rs, manual ->
+                    // only background refresh is eligible for top-bar spinner.
+                    rs.isRefreshing && !manual
+                }
+                .distinctUntilChanged()
+                .collectLatest { shouldSpin ->
+                    if (shouldSpin) {
+                        delay(showDelayMs)
+
+                        if (refreshState.value.isRefreshing && !manualRefreshing.value) {
+                            _showBackgroundSpinnerInTopBar.value = true
+                            shownAt = System.currentTimeMillis()
+                        }
+                    } else {
+                        if (_showBackgroundSpinnerInTopBar.value) {
+                            val elapsed = System.currentTimeMillis() - shownAt
+                            val remaining = minVisibleMs - elapsed
+                            if (remaining > 0) delay(remaining)
+                        }
+                        _showBackgroundSpinnerInTopBar.value = false
+                    }
+                }
+        }
+    }
+
+    private suspend fun runBackgroundRefresh() {
+        if (!bgMutex.tryLock()) return
+        try {
+            val result = repository.refreshCatalog(force = false)
+            val at = System.currentTimeMillis()
+
+            when (result) {
+                is AppResult.Success -> recordSuccess(at)
+                is AppResult.Error -> recordFailure(result.error, RefreshOrigin.Automatic, at)
+            }
+        } finally {
+            bgMutex.unlock()
+        }
+    }
+
+    private fun buildCatalogStatusUi(
+        refreshState: CatalogRefreshState,
+        log: RefreshLog,
+        showBackgroundSpinnerInTopBar: Boolean,
+        isManualRefreshing: Boolean,
+    ): CatalogStatusUi {
+        val isRefreshing = isManualRefreshing || refreshState.isRefreshing
+
+        val showSpinnerInIcon = !isManualRefreshing && showBackgroundSpinnerInTopBar
+
+        val lastSuccessAt = log.lastSuccessAt ?: Long.MIN_VALUE
+        val failure = log.lastFailure?.takeIf { it.at > lastSuccessAt }
+
+        val icon =
+            when {
+                showSpinnerInIcon -> CatalogStatusIcon.BackgroundRefreshing
+                failure?.error is AppError.Offline -> CatalogStatusIcon.Offline
+                failure != null -> CatalogStatusIcon.Error
+                else -> CatalogStatusIcon.Ok
+            }
+
+        return CatalogStatusUi(
+            lastUpdatedEpochMillis = refreshState.lastUpdatedEpochMillis,
+            icon = icon,
+            error = failure?.error,
+            errorOrigin = failure?.origin,
+            isRefreshing = isRefreshing,
+        )
+    }
+
+    private fun recordSuccess(at: Long) {
+        _refreshLog.update { it.copy(lastSuccessAt = at, lastFailure = null) }
+    }
+
+    private fun recordFailure(error: AppError, origin: RefreshOrigin, at: Long) {
+        _refreshLog.update { current ->
+            val newFailure = LastFailure(error = error, origin = origin, at = at)
+
+            // keep the newest failure only
+            val keepOld = current.lastFailure?.at?.let { it > at } == true
+            if (keepOld) current else current.copy(lastFailure = newFailure)
+        }
     }
 }
+
+enum class RefreshOrigin {
+    Automatic,
+    Manual,
+}
+
+enum class CatalogStatusIcon {
+    Ok,
+    Offline,
+    Error,
+    BackgroundRefreshing,
+}
+
+data class CatalogStatusUi(
+    val lastUpdatedEpochMillis: Long?,
+    val icon: CatalogStatusIcon,
+    val error: AppError?,
+    val errorOrigin: RefreshOrigin?,
+    val isRefreshing: Boolean,
+)
 
 private fun Movie.toRowUi(): MovieRowUi {
     val parts = buildList {
