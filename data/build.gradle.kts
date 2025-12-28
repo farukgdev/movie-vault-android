@@ -67,6 +67,9 @@ dependencies {
     implementation(libs.retrofit.converter.kotlinx.serialization)
     implementation(libs.logging.interceptor)
 
+    implementation(libs.androidx.paging.common)
+    implementation(libs.androidx.paging.runtime)
+    implementation(libs.androidx.room.paging)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)

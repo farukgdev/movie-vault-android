@@ -7,7 +7,6 @@ import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import com.farukg.movievault.data.local.dao.MovieDao
-import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -17,7 +16,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
-class Migration1To2Test {
+class Migration2To3Test {
 
     private val dbName = "movievault-migration-test.db"
     private lateinit var context: Context
@@ -34,11 +33,11 @@ class Migration1To2Test {
     }
 
     @Test
-    fun migration_1_2_creates_cache_metadata_and_preserves_existing_data() {
-        val helper = createV1Db(dbName)
-        val dbV1 = helper.writableDatabase
+    fun migration_2_3_creates_remote_keys_table_and_preserves_existing_data() {
+        val helper = createV2Db(dbName)
+        val dbV2 = helper.writableDatabase
 
-        dbV1.execSQL(
+        dbV2.execSQL(
             """
             INSERT INTO movies(
               id, title, releaseYear, posterUrl, rating, overview, runtimeMinutes, genres, popularRank
@@ -48,20 +47,24 @@ class Migration1To2Test {
             arrayOf(42L, "Seeded Movie", 2024, null, 7.5, null, null, "[]", 0),
         )
 
-        dbV1.execSQL(
+        dbV2.execSQL(
             "INSERT INTO favorites(movieId, createdAtEpochMillis) VALUES(?, ?)",
             arrayOf(42L, 999L),
         )
 
-        assertEquals(1L, queryLong(dbV1, "PRAGMA user_version"))
+        dbV2.execSQL(
+            "INSERT INTO cache_metadata(`key`, lastUpdatedEpochMillis) VALUES(?, ?)",
+            arrayOf("catalog_last_updated", 1234L),
+        )
 
-        dbV1.close()
+        assertEquals(2L, queryLong(dbV2, "PRAGMA user_version"))
+
+        dbV2.close()
         helper.close()
 
-        // Apply migration
         val roomDb =
             Room.databaseBuilder(context, MovieVaultDatabase::class.java, dbName)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_2_3)
                 .allowMainThreadQueries()
                 .build()
 
@@ -69,39 +72,51 @@ class Migration1To2Test {
 
         assertEquals(3L, queryLong(migratedDb, "PRAGMA user_version"))
 
-        // Verify cache_metadata table exists
         assertEquals(
             1L,
             queryLong(
                 migratedDb,
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='cache_metadata'",
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='catalog_remote_keys'",
             ),
         )
 
-        // Verify cache_metadata table columns are exactly what entity expects
-        val cacheCols = tableColumns(migratedDb, "cache_metadata")
-        assertTrue("cache_metadata must contain column 'key'", cacheCols.any { it.name == "key" })
+        val cols = tableColumns(migratedDb, "catalog_remote_keys")
+
         assertTrue(
-            "cache_metadata must contain column 'lastUpdatedEpochMillis'",
-            cacheCols.any { it.name == "lastUpdatedEpochMillis" },
+            "catalog_remote_keys must contain column 'movieId'",
+            cols.any { it.name == "movieId" },
+        )
+        assertTrue(
+            "catalog_remote_keys must contain column 'prevKey'",
+            cols.any { it.name == "prevKey" },
+        )
+        assertTrue(
+            "catalog_remote_keys must contain column 'nextKey'",
+            cols.any { it.name == "nextKey" },
         )
 
-        val keyCol = cacheCols.first { it.name == "key" }
-        assertEquals("TEXT", keyCol.type.uppercase())
-        assertTrue("key should be NOT NULL", keyCol.notNull)
-        assertTrue("key should be PRIMARY KEY", keyCol.pk)
+        val movieIdCol = cols.first { it.name == "movieId" }
+        assertEquals("INTEGER", movieIdCol.type.uppercase())
+        assertTrue("movieId should be NOT NULL", movieIdCol.notNull)
+        assertTrue("movieId should be PRIMARY KEY", movieIdCol.pk)
 
-        val updatedCol = cacheCols.first { it.name == "lastUpdatedEpochMillis" }
-        assertEquals("INTEGER", updatedCol.type.uppercase())
-        assertTrue("lastUpdatedEpochMillis should be NOT NULL", updatedCol.notNull)
-        assertTrue("lastUpdatedEpochMillis should NOT be PRIMARY KEY", !updatedCol.pk)
+        val prevCol = cols.first { it.name == "prevKey" }
+        assertEquals("INTEGER", prevCol.type.uppercase())
+        assertTrue("prevKey should be nullable", !prevCol.notNull)
+        assertTrue("prevKey should NOT be PK", !prevCol.pk)
 
-        // Verify old tables and rows are preserved
+        val nextCol = cols.first { it.name == "nextKey" }
+        assertEquals("INTEGER", nextCol.type.uppercase())
+        assertTrue("nextKey should be nullable", !nextCol.notNull)
+        assertTrue("nextKey should NOT be PK", !nextCol.pk)
+
+        // old tables + rows preserved
         assertEquals(1L, queryLong(migratedDb, "SELECT COUNT(*) FROM movies"))
         assertEquals(1L, queryLong(migratedDb, "SELECT COUNT(*) FROM favorites"))
+        assertEquals(1L, queryLong(migratedDb, "SELECT COUNT(*) FROM cache_metadata"))
 
         val movieDao: MovieDao = roomDb.movieDao()
-        val found = runBlocking { movieDao.getMovie(42L) }
+        val found = runBlockingGetMovie(movieDao, 42L)
         requireNotNull(found)
         assertEquals(42L, found.id)
         assertEquals("Seeded Movie", found.title)
@@ -109,13 +124,13 @@ class Migration1To2Test {
         roomDb.close()
     }
 
-    private fun createV1Db(name: String): SupportSQLiteOpenHelper {
+    private fun createV2Db(name: String): SupportSQLiteOpenHelper {
         val factory = FrameworkSQLiteOpenHelperFactory()
         val config =
             SupportSQLiteOpenHelper.Configuration.builder(context)
                 .name(name)
                 .callback(
-                    object : SupportSQLiteOpenHelper.Callback(1) {
+                    object : SupportSQLiteOpenHelper.Callback(2) {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             db.execSQL(
                                 """
@@ -145,19 +160,33 @@ class Migration1To2Test {
                                 """
                                     .trimIndent()
                             )
+
+                            db.execSQL(
+                                """
+                                CREATE TABLE IF NOT EXISTS cache_metadata (
+                                  `key` TEXT NOT NULL,
+                                  `lastUpdatedEpochMillis` INTEGER NOT NULL,
+                                  PRIMARY KEY(`key`)
+                                )
+                                """
+                                    .trimIndent()
+                            )
+
+                            db.execSQL("PRAGMA user_version = 2")
                         }
 
                         override fun onUpgrade(
                             db: SupportSQLiteDatabase,
                             oldVersion: Int,
                             newVersion: Int,
-                        ) {
-                            // no-op for v1 helper
-                        }
+                        ) {}
                     }
                 )
                 .build()
 
         return factory.create(config)
     }
+
+    private fun runBlockingGetMovie(movieDao: MovieDao, id: Long) =
+        kotlinx.coroutines.runBlocking { movieDao.getMovie(id) }
 }
