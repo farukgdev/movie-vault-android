@@ -129,7 +129,7 @@ constructor(
 
                 refreshState.value = refreshState.value.copy(isRefreshing = true, lastError = null)
 
-                val remoteResult = remote.fetchPopular(page = 1)
+                val remoteResult = remote.fetchPopularPage(page = 1)
 
                 when (remoteResult) {
                     is AppResult.Error -> {
@@ -142,7 +142,7 @@ constructor(
                     }
 
                     is AppResult.Success -> {
-                        val incoming = remoteResult.data
+                        val incoming = remoteResult.data.results
                         val incomingIds = incoming.map { it.id }
                         val existingById =
                             movieDao.getMoviesByIds(incomingIds).associateBy { it.id }
