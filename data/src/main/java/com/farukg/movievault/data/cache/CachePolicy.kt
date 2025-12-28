@@ -1,7 +1,7 @@
 package com.farukg.movievault.data.cache
 
 object CachePolicy {
-    private const val CATALOG_STALE_AFTER_MILLIS: Long = 60 * 60 * 1000L
+    const val CATALOG_STALE_AFTER_MILLIS: Long = 60 * 60 * 1000L
 
     fun isCatalogStale(
         lastUpdatedEpochMillis: Long?,
