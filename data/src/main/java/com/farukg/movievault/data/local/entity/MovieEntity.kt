@@ -13,5 +13,5 @@ data class MovieEntity(
     val overview: String?,
     val runtimeMinutes: Int?,
     val genres: List<String>,
-    val popularRank: Int, // ordering for catalog
+    val popularRank: Int, // catalog ordering: >=0 means "in catalog", -1 means "not in catalog"
 )

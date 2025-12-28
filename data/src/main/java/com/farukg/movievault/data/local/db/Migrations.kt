@@ -18,3 +18,20 @@ internal val MIGRATION_1_2 =
             )
         }
     }
+
+internal val MIGRATION_2_3 =
+    object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS catalog_remote_keys (
+                    movieId INTEGER NOT NULL,
+                    prevKey INTEGER,
+                    nextKey INTEGER,
+                    PRIMARY KEY(movieId)
+                )
+                """
+                    .trimIndent()
+            )
+        }
+    }
