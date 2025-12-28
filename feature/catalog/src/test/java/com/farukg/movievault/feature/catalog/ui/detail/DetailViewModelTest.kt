@@ -5,6 +5,7 @@ import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.result.AppResult
 import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.model.MovieDetail
+import com.farukg.movievault.data.repository.CatalogRefreshState
 import com.farukg.movievault.data.repository.CatalogRepository
 import com.farukg.movievault.data.repository.FavoritesRepository
 import com.farukg.movievault.feature.catalog.testing.MainDispatcherRule
@@ -197,6 +198,18 @@ class DetailViewModelTest {
             lastRequestedId = movieId
             return detailFlow
         }
+
+        override fun catalogRefreshState(): Flow<CatalogRefreshState> =
+            flowOf(
+                CatalogRefreshState(
+                    lastUpdatedEpochMillis = null,
+                    isRefreshing = false,
+                    lastRefreshError = null,
+                )
+            )
+
+        override suspend fun refreshCatalog(force: Boolean): AppResult<Unit> =
+            AppResult.Success(Unit)
     }
 
     private class TestFavoritesRepository : FavoritesRepository {

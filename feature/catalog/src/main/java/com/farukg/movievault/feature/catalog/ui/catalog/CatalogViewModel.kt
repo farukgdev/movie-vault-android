@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.result.AppResult
+import com.farukg.movievault.core.time.Clock
 import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.repository.CatalogRefreshState
 import com.farukg.movievault.data.repository.CatalogRepository
@@ -27,9 +28,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 
+internal const val STATUS_SPINNER_SHOW_DELAY_MS = 150L
+internal const val STATUS_SPINNER_MIN_VISIBLE_MS = 500L
+
 @HiltViewModel
-class CatalogViewModel @Inject constructor(private val repository: CatalogRepository) :
-    ViewModel() {
+class CatalogViewModel
+@Inject
+constructor(private val repository: CatalogRepository, private val clock: Clock) : ViewModel() {
 
     private val _refreshEvents = MutableSharedFlow<AppError>(extraBufferCapacity = 1)
     val refreshEvents: SharedFlow<AppError> = _refreshEvents.asSharedFlow()
@@ -113,7 +118,7 @@ class CatalogViewModel @Inject constructor(private val repository: CatalogReposi
     }
 
     fun onResumed() {
-        val now = System.currentTimeMillis()
+        val now = clock.now()
         if (now - lastResumeRefreshAtEpochMillis < resumeRefreshThrottleMs) return
         lastResumeRefreshAtEpochMillis = now
         viewModelScope.launch { runBackgroundRefresh() }
@@ -125,7 +130,7 @@ class CatalogViewModel @Inject constructor(private val repository: CatalogReposi
             _showBackgroundSpinnerInTopBar.value = false
 
             val result = repository.refreshCatalog(force = true)
-            val at = System.currentTimeMillis()
+            val at = clock.now()
 
             when (result) {
                 is AppResult.Success -> {
@@ -145,8 +150,8 @@ class CatalogViewModel @Inject constructor(private val repository: CatalogReposi
 
     private fun startTopBarSpinnerController() {
         // don't show immediately (avoid flicker)
-        val showDelayMs = 150L
-        val minVisibleMs = 500L
+        val showDelayMs = STATUS_SPINNER_SHOW_DELAY_MS
+        val minVisibleMs = STATUS_SPINNER_MIN_VISIBLE_MS
 
         viewModelScope.launch {
             var shownAt = 0L
@@ -162,11 +167,11 @@ class CatalogViewModel @Inject constructor(private val repository: CatalogReposi
 
                         if (refreshState.value.isRefreshing && !manualRefreshing.value) {
                             _showBackgroundSpinnerInTopBar.value = true
-                            shownAt = System.currentTimeMillis()
+                            shownAt = clock.now()
                         }
                     } else {
                         if (_showBackgroundSpinnerInTopBar.value) {
-                            val elapsed = System.currentTimeMillis() - shownAt
+                            val elapsed = clock.now() - shownAt
                             val remaining = minVisibleMs - elapsed
                             if (remaining > 0) delay(remaining)
                         }
@@ -180,7 +185,7 @@ class CatalogViewModel @Inject constructor(private val repository: CatalogReposi
         if (!bgMutex.tryLock()) return
         try {
             val result = repository.refreshCatalog(force = false)
-            val at = System.currentTimeMillis()
+            val at = clock.now()
 
             when (result) {
                 is AppResult.Success -> recordSuccess(at)
