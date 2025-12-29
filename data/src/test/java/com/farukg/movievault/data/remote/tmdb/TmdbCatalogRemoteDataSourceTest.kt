@@ -45,7 +45,7 @@ class TmdbCatalogRemoteDataSourceTest {
     }
 
     @Test
-    fun `popular movies - parses json and maps to domain`() = runTest {
+    fun `popular movies page - parses json and maps to domain with metadata`() = runTest {
         server.enqueue(
             MockResponse()
                 .setResponseCode(200)
@@ -63,8 +63,8 @@ class TmdbCatalogRemoteDataSourceTest {
                           "vote_average": 7.5
                         }
                       ],
-                      "total_pages": 1,
-                      "total_results": 1
+                      "total_pages": 9,
+                      "total_results": 999
                     }
                     """
                         .trimIndent()
@@ -73,24 +73,29 @@ class TmdbCatalogRemoteDataSourceTest {
 
         val imageBaseUrl = "https://image.tmdb.org/t/p/w500"
         val ds = TmdbCatalogRemoteDataSource(api = api, imageBaseUrl = imageBaseUrl)
-        val result = ds.fetchPopular(1)
+
+        val result = ds.fetchPopularPage(1)
 
         assertTrue(result is AppResult.Success)
-        val movies = (result as AppResult.Success).data
-        assertEquals(1, movies.size)
-        assertEquals(123L, movies[0].id)
-        assertEquals("Test Movie", movies[0].title)
-        assertEquals(2020, movies[0].releaseYear)
-        assertEquals("https://image.tmdb.org/t/p/w500/abc.jpg", movies[0].posterUrl)
+        val page = (result as AppResult.Success).data
 
-        // proves the correct endpoint was hit with the page query
+        assertEquals(1, page.page)
+        assertEquals(9, page.totalPages)
+        assertEquals(1, page.results.size)
+
+        val movie = page.results[0]
+        assertEquals(123L, movie.id)
+        assertEquals("Test Movie", movie.title)
+        assertEquals(2020, movie.releaseYear)
+        assertEquals("https://image.tmdb.org/t/p/w500/abc.jpg", movie.posterUrl)
+
         val req = server.takeRequest()
         assertTrue(req.path!!.startsWith("/movie/popular"))
         assertTrue(req.path!!.contains("page=1"))
     }
 
     @Test
-    fun `popular movies - http error becomes AppError_Http`() = runTest {
+    fun `popular movies page - http error becomes AppError_Http`() = runTest {
         server.enqueue(
             MockResponse()
                 .setResponseCode(401)
@@ -100,7 +105,8 @@ class TmdbCatalogRemoteDataSourceTest {
 
         val imageBaseUrl = "https://image.tmdb.org/t/p/w500"
         val ds = TmdbCatalogRemoteDataSource(api = api, imageBaseUrl = imageBaseUrl)
-        val result = ds.fetchPopular(1)
+
+        val result = ds.fetchPopularPage(1)
 
         assertTrue(result is AppResult.Error)
         val error = (result as AppResult.Error).error

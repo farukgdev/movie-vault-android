@@ -1,5 +1,10 @@
 package com.farukg.movievault.data.repository.room
 
+import androidx.paging.ExperimentalPagingApi
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.map
 import androidx.room.withTransaction
 import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.result.AppResult
@@ -7,16 +12,20 @@ import com.farukg.movievault.core.result.map
 import com.farukg.movievault.data.cache.CacheKeys
 import com.farukg.movievault.data.cache.CachePolicy
 import com.farukg.movievault.data.local.dao.CacheMetadataDao
+import com.farukg.movievault.data.local.dao.CatalogRemoteKeysDao
 import com.farukg.movievault.data.local.dao.FavoriteDao
 import com.farukg.movievault.data.local.dao.MovieDao
 import com.farukg.movievault.data.local.db.MovieVaultDatabase
 import com.farukg.movievault.data.local.entity.CacheMetadataEntity
+import com.farukg.movievault.data.local.entity.CatalogRemoteKeyEntity
 import com.farukg.movievault.data.local.entity.MovieEntity
 import com.farukg.movievault.data.local.mapper.hasDetailFields
 import com.farukg.movievault.data.local.mapper.toDomainDetail
 import com.farukg.movievault.data.local.mapper.toDomainMovie
+import com.farukg.movievault.data.local.model.MovieWithFavorite
 import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.model.MovieDetail
+import com.farukg.movievault.data.paging.CatalogRemoteMediator
 import com.farukg.movievault.data.remote.CatalogRemoteDataSource
 import com.farukg.movievault.data.repository.CatalogRefreshState
 import com.farukg.movievault.data.repository.CatalogRepository
@@ -27,6 +36,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -41,12 +51,18 @@ constructor(
     private val favoriteDao: FavoriteDao,
     private val cacheMetadataDao: CacheMetadataDao,
     private val remote: CatalogRemoteDataSource,
+    private val remoteKeysDao: CatalogRemoteKeysDao,
 ) : CatalogRepository {
 
     private data class RefreshInternalState(
         val isRefreshing: Boolean = false,
         val lastError: AppError? = null,
     )
+
+    private companion object {
+        const val TMDB_PAGE_SIZE = 20
+        const val NOT_IN_CATALOG_RANK = -1
+    }
 
     private val refreshMutex = Mutex()
     private val refreshState = MutableStateFlow(RefreshInternalState())
@@ -58,6 +74,32 @@ constructor(
             AppResult.Success(movies)
         }
 
+    @OptIn(ExperimentalPagingApi::class)
+    override fun catalogPaging(): Flow<PagingData<Movie>> =
+        Pager(
+                config =
+                    PagingConfig(
+                        pageSize = TMDB_PAGE_SIZE,
+                        prefetchDistance = TMDB_PAGE_SIZE / 2,
+                        enablePlaceholders = false,
+                    ),
+                remoteMediator =
+                    CatalogRemoteMediator(
+                        db = db,
+                        movieDao = movieDao,
+                        remoteKeysDao = remoteKeysDao,
+                        cacheMetadataDao = cacheMetadataDao,
+                        remote = remote,
+                    ),
+                pagingSourceFactory = { movieDao.catalogPagingSource() },
+            )
+            .flow
+            .map { pagingData ->
+                pagingData.map { row: MovieWithFavorite ->
+                    row.movie.toDomainMovie(isFavorite = row.isFavorite)
+                }
+            }
+
     override fun movieDetail(movieId: Long): Flow<AppResult<MovieDetail>> = channelFlow {
         val existing = withContext(Dispatchers.IO) { movieDao.getMovie(movieId) }
 
@@ -65,7 +107,7 @@ constructor(
             // No cached row
             when (val fetched = withContext(Dispatchers.IO) { remote.fetchMovieDetail(movieId) }) {
                 is AppResult.Success -> {
-                    val merged = fetched.data.toEntity(popularRank = Int.MAX_VALUE)
+                    val merged = fetched.data.toEntity(popularRank = NOT_IN_CATALOG_RANK)
                     withContext(Dispatchers.IO) { movieDao.upsert(merged) }
                 }
                 is AppResult.Error -> {
@@ -148,6 +190,9 @@ constructor(
                             movieDao.getMoviesByIds(incomingIds).associateBy { it.id }
 
                         db.withTransaction {
+                            movieDao.clearCatalogRanks()
+                            remoteKeysDao.clearRemoteKeys()
+
                             val mergedEntities =
                                 incoming.mapIndexed { index, movie ->
                                     val existing = existingById[movie.id]
@@ -166,6 +211,20 @@ constructor(
                                 }
 
                             movieDao.upsertAll(mergedEntities)
+
+                            val endReached =
+                                incoming.isEmpty() ||
+                                    remoteResult.data.page >= remoteResult.data.totalPages
+
+                            remoteKeysDao.insertAll(
+                                incoming.map {
+                                    CatalogRemoteKeyEntity(
+                                        movieId = it.id,
+                                        prevKey = null,
+                                        nextKey = if (endReached) null else 2,
+                                    )
+                                }
+                            )
 
                             cacheMetadataDao.upsert(
                                 CacheMetadataEntity(
