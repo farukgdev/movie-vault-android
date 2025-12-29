@@ -8,6 +8,7 @@ import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.result.AppResult
 import com.farukg.movievault.data.cache.CacheKeys
 import com.farukg.movievault.data.local.dao.CacheMetadataDao
+import com.farukg.movievault.data.local.dao.CatalogRemoteKeysDao
 import com.farukg.movievault.data.local.dao.FavoriteDao
 import com.farukg.movievault.data.local.dao.MovieDao
 import com.farukg.movievault.data.local.db.MovieVaultDatabase
@@ -15,6 +16,7 @@ import com.farukg.movievault.data.local.entity.CacheMetadataEntity
 import com.farukg.movievault.data.local.entity.MovieEntity
 import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.model.MovieDetail
+import com.farukg.movievault.data.model.MoviesPage
 import com.farukg.movievault.data.remote.CatalogRemoteDataSource
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -34,6 +36,7 @@ class RoomCatalogRepositoryRefreshTest {
     private lateinit var movieDao: MovieDao
     private lateinit var favoriteDao: FavoriteDao
     private lateinit var cacheDao: CacheMetadataDao
+    private lateinit var remoteKeysDao: CatalogRemoteKeysDao
     private lateinit var remote: FakeRemote
 
     private lateinit var repo: RoomCatalogRepository
@@ -49,6 +52,7 @@ class RoomCatalogRepositoryRefreshTest {
         movieDao = db.movieDao()
         favoriteDao = db.favoriteDao()
         cacheDao = db.cacheMetadataDao()
+        remoteKeysDao = db.catalogRemoteKeysDao()
         remote = FakeRemote()
 
         repo =
@@ -58,6 +62,7 @@ class RoomCatalogRepositoryRefreshTest {
                 favoriteDao = favoriteDao,
                 cacheMetadataDao = cacheDao,
                 remote = remote,
+                remoteKeysDao = remoteKeysDao,
             )
     }
 
@@ -73,13 +78,19 @@ class RoomCatalogRepositoryRefreshTest {
             CacheMetadataEntity(CacheKeys.CATALOG_LAST_UPDATED, lastUpdatedEpochMillis = now)
         )
 
-        remote.popularResult =
-            AppResult.Success(listOf(Movie(id = 1L, title = "ShouldNotBeUsed", releaseYear = 2024)))
+        remote.page1Result =
+            AppResult.Success(
+                MoviesPage(
+                    page = 1,
+                    totalPages = 1,
+                    results = listOf(Movie(id = 1L, title = "ShouldNotBeUsed", releaseYear = 2024)),
+                )
+            )
 
         val result = repo.refreshCatalog(force = false)
 
         assertTrue(result is AppResult.Success)
-        assertEquals(0, remote.fetchPopularCalls)
+        assertEquals(0, remote.fetchPopularPageCalls)
     }
 
     @Test
@@ -89,13 +100,19 @@ class RoomCatalogRepositoryRefreshTest {
             CacheMetadataEntity(CacheKeys.CATALOG_LAST_UPDATED, lastUpdatedEpochMillis = now)
         )
 
-        remote.popularResult =
-            AppResult.Success(listOf(Movie(id = 1L, title = "FromRemote", releaseYear = 2024)))
+        remote.page1Result =
+            AppResult.Success(
+                MoviesPage(
+                    page = 1,
+                    totalPages = 1,
+                    results = listOf(Movie(id = 1L, title = "FromRemote", releaseYear = 2024)),
+                )
+            )
 
         val result = repo.refreshCatalog(force = true)
 
         assertTrue(result is AppResult.Success)
-        assertEquals(1, remote.fetchPopularCalls)
+        assertEquals(1, remote.fetchPopularPageCalls)
 
         val stored = movieDao.getMovie(1L)
         assertNotNull(stored)
@@ -122,17 +139,22 @@ class RoomCatalogRepositoryRefreshTest {
             CacheMetadataEntity(CacheKeys.CATALOG_LAST_UPDATED, lastUpdatedEpochMillis = 0L)
         )
 
-        remote.popularResult =
+        remote.page1Result =
             AppResult.Success(
-                listOf(
-                    Movie(
-                        id = 7L,
-                        title = "NewTitle",
-                        releaseYear = 2021,
-                        posterUrl = "p",
-                        rating = 8.5,
-                        isFavorite = false,
-                    )
+                MoviesPage(
+                    page = 1,
+                    totalPages = 1,
+                    results =
+                        listOf(
+                            Movie(
+                                id = 7L,
+                                title = "NewTitle",
+                                releaseYear = 2021,
+                                posterUrl = "p",
+                                rating = 8.5,
+                                isFavorite = false,
+                            )
+                        ),
                 )
             )
 
@@ -141,7 +163,7 @@ class RoomCatalogRepositoryRefreshTest {
         val end = System.currentTimeMillis()
 
         assertTrue(result is AppResult.Success)
-        assertEquals(1, remote.fetchPopularCalls)
+        assertEquals(1, remote.fetchPopularPageCalls)
 
         val stored = movieDao.getMovie(7L)
         requireNotNull(stored)
@@ -156,7 +178,7 @@ class RoomCatalogRepositoryRefreshTest {
         assertEquals(99, stored.runtimeMinutes)
         assertEquals(listOf("Drama"), stored.genres)
 
-        // catalog ordering refreshed
+        // refreshed rank
         assertEquals(0, stored.popularRank)
 
         val lastUpdated = cacheDao.get(CacheKeys.CATALOG_LAST_UPDATED)?.lastUpdatedEpochMillis
@@ -193,7 +215,7 @@ class RoomCatalogRepositoryRefreshTest {
             )
 
             val err = AppError.Network()
-            remote.popularResult = AppResult.Error(err)
+            remote.page1Result = AppResult.Error(err)
 
             repo.catalogRefreshState().test {
                 val initial = awaitItem()
@@ -225,23 +247,19 @@ class RoomCatalogRepositoryRefreshTest {
         }
 
     private class FakeRemote : CatalogRemoteDataSource {
-        var fetchPopularCalls: Int = 0
+        var fetchPopularPageCalls: Int = 0
             private set
 
-        var fetchDetailCalls: Int = 0
-            private set
+        var page1Result: AppResult<MoviesPage> =
+            AppResult.Success(MoviesPage(page = 1, totalPages = 1, results = emptyList()))
 
-        var popularResult: AppResult<List<Movie>> = AppResult.Success(emptyList())
-        var detailResult: AppResult<MovieDetail> = AppResult.Error(AppError.Http(404))
-
-        override suspend fun fetchPopular(page: Int): AppResult<List<Movie>> {
-            fetchPopularCalls++
-            return popularResult
+        override suspend fun fetchPopularPage(page: Int): AppResult<MoviesPage> {
+            fetchPopularPageCalls++
+            return page1Result
         }
 
         override suspend fun fetchMovieDetail(movieId: Long): AppResult<MovieDetail> {
-            fetchDetailCalls++
-            return detailResult
+            return AppResult.Error(AppError.Http(404))
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.farukg.movievault.feature.catalog.ui.catalog
 
+import androidx.paging.PagingData
 import app.cash.turbine.test
 import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.result.AppResult
@@ -243,6 +244,8 @@ class CatalogViewModelRefreshStatusTest {
         }
 
         override fun catalog(): Flow<AppResult<List<Movie>>> = catalogFlow
+
+        override fun catalogPaging(): Flow<PagingData<Movie>> = flowOf(PagingData.empty())
 
         override fun movieDetail(movieId: Long): Flow<AppResult<MovieDetail>> =
             flowOf(AppResult.Error(AppError.Http(404)))
