@@ -78,6 +78,7 @@ private fun MovieDetail.toUiState(): DetailUiState.Content {
         metaPrimary = metaPrimary,
         metaSecondary = metaSecondary,
         overview = overview.ifBlank { "No overview available." },
+        posterUrl = posterUrl,
         isFavorite = isFavorite,
     )
 }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -75,6 +76,8 @@ import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.EmptyState
 import com.farukg.movievault.core.ui.ErrorState
+import com.farukg.movievault.feature.catalog.ui.components.MoviePoster
+import com.farukg.movievault.feature.catalog.ui.components.catalogPosterHeightDp
 import kotlin.math.max
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -305,6 +308,7 @@ private fun CatalogList(
                 MovieRow(
                     title = row.title,
                     subtitle = row.subtitle,
+                    posterUrl = row.posterUrl,
                     onClick = { onOpenDetail(row.id) },
                 )
             }
@@ -636,6 +640,7 @@ private fun StatusSheetContent(
 private fun MovieRow(
     title: String,
     subtitle: String,
+    posterUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -651,11 +656,12 @@ private fun MovieRow(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Spacer(
-                modifier =
-                    Modifier.size(width = 52.dp, height = 72.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+            val posterHeight = catalogPosterHeightDp()
+
+            MoviePoster(
+                posterUrl = posterUrl,
+                contentDescription = "$title poster",
+                modifier = Modifier.height(posterHeight).aspectRatio(2f / 3f),
             )
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -689,9 +695,11 @@ private fun MovieRowPlaceholder(modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            val posterHeight = catalogPosterHeightDp()
             Spacer(
                 modifier =
-                    Modifier.size(width = 52.dp, height = 72.dp)
+                    Modifier.height(posterHeight)
+                        .aspectRatio(2f / 3f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
             )

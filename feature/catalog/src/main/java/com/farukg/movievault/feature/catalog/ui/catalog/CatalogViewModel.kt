@@ -303,5 +303,10 @@ private fun Movie.toRowUi(): MovieRowUi {
         releaseYear?.let { add(it.toString()) }
         rating?.let { add("★ ${"%.1f".format(it)}") }
     }
-    return MovieRowUi(id = id, title = title, subtitle = parts.joinToString(" • "))
+    return MovieRowUi(
+        id = id,
+        title = title,
+        subtitle = parts.joinToString(" • "),
+        posterUrl = posterUrl,
+    )
 }

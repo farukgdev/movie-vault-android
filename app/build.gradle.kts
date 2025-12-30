@@ -43,6 +43,8 @@ dependencies {
     implementation(project(":feature:catalog"))
     implementation(project(":feature:favorites"))
 
+    implementation(libs.coil)
+    implementation(libs.coil.network.okhttp)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 

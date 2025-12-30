@@ -1,16 +1,15 @@
 package com.farukg.movievault.feature.catalog.ui.detail
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Favorite
@@ -24,11 +23,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.ErrorState
 import com.farukg.movievault.core.ui.LoadingState
+import com.farukg.movievault.feature.catalog.ui.components.MoviePoster
+import com.farukg.movievault.feature.catalog.ui.components.detailPosterHeightDp
 
 @Composable
 fun DetailScreen(
@@ -92,12 +92,11 @@ fun DetailScreen(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                             verticalAlignment = Alignment.Top,
                         ) {
-                            Spacer(
-                                modifier =
-                                    Modifier.width(96.dp)
-                                        .height(140.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                            val posterHeight = detailPosterHeightDp()
+                            MoviePoster(
+                                posterUrl = uiState.posterUrl,
+                                contentDescription = "${uiState.title} poster",
+                                modifier = Modifier.height(posterHeight).aspectRatio(2f / 3f),
                             )
 
                             Spacer(modifier = Modifier.width(16.dp))
