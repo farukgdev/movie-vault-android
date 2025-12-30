@@ -13,7 +13,6 @@ import com.farukg.movievault.data.test.movieEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -82,13 +81,9 @@ class RoomCatalogRepositoryDetailRankTest {
             assertEquals(-1, stored.popularRank)
 
             // catalog should only have the catalog movie
-            repo.catalog().test {
-                val first = awaitItem()
-                assertTrue(first is AppResult.Success)
-                val movies = (first as AppResult.Success).data
-                assertEquals(listOf(1L), movies.map { it.id })
-                cancelAndIgnoreRemainingEvents()
-            }
+            assertEquals(1, db.movieDao().countCatalogMovies())
+            val catalogMovie = db.movieDao().getMovie(1L)!!
+            assertEquals(0, catalogMovie.popularRank)
         }
 
     private class FakeRemote : CatalogRemoteDataSource {

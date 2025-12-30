@@ -47,11 +47,7 @@ class CatalogRemoteMediator(
     ): MediatorResult {
         val page =
             when (loadType) {
-                LoadType.REFRESH -> {
-                    val anchor = state.anchorPosition?.let { state.closestItemToPosition(it) }
-                    val key = anchor?.let { remoteKeysDao.remoteKeyByMovieId(it.movie.id) }
-                    key?.nextKey?.minus(1) ?: 1
-                }
+                LoadType.REFRESH -> 1
 
                 LoadType.PREPEND -> {
                     // We don’t support “load newer than page 1” for this feed.
@@ -82,19 +78,20 @@ class CatalogRemoteMediator(
                 val endOfPaginationReached =
                     incoming.isEmpty() || pageData.page >= pageData.totalPages
 
+                val distinctIncoming = incoming.distinctBy { it.id }
+                val ids = distinctIncoming.map { it.id }
+                val existingById = movieDao.getMoviesByIds(ids).associateBy { it.id }
+
+                val baseRank = (page - 1) * state.config.pageSize
+
                 db.withTransaction {
                     if (loadType == LoadType.REFRESH) {
                         remoteKeysDao.clearRemoteKeys()
                         movieDao.clearCatalogRanks()
                     }
 
-                    val ids = incoming.map { it.id }
-                    val existingById = movieDao.getMoviesByIds(ids).associateBy { it.id }
-
-                    val baseRank = (page - 1) * state.config.pageSize
-
                     val entities =
-                        incoming.mapIndexed { index, movie ->
+                        distinctIncoming.mapIndexed { index, movie ->
                             val existing = existingById[movie.id]
                             MovieEntity(
                                 id = movie.id,
@@ -112,7 +109,7 @@ class CatalogRemoteMediator(
                     movieDao.upsertAll(entities)
 
                     val keys =
-                        incoming.map { movie ->
+                        distinctIncoming.map { movie ->
                             CatalogRemoteKeyEntity(
                                 movieId = movie.id,
                                 prevKey = if (page == 1) null else page - 1,
