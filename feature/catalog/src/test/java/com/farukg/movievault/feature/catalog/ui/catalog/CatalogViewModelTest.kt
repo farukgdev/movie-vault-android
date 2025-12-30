@@ -33,13 +33,13 @@ class CatalogViewModelTest {
             vm.refreshRequests.test {
                 testScheduler.runCurrent()
 
-                vm.onResumed()
+                vm.onResumed(canAutoRefresh = true)
                 testScheduler.runCurrent()
                 assertEquals(RefreshOrigin.Automatic, awaitItem())
                 assertEquals(1, repo.isStaleCalls)
 
                 // within throttle window
-                vm.onResumed()
+                vm.onResumed(canAutoRefresh = true)
                 testScheduler.runCurrent()
                 expectNoEvents()
                 assertEquals(1, repo.isStaleCalls)
@@ -47,7 +47,7 @@ class CatalogViewModelTest {
                 testScheduler.advanceTimeBy(RESUME_REFRESH_THROTTLE_MS)
                 testScheduler.runCurrent()
 
-                vm.onResumed()
+                vm.onResumed(canAutoRefresh = true)
                 testScheduler.runCurrent()
                 assertEquals(RefreshOrigin.Automatic, awaitItem())
                 assertEquals(2, repo.isStaleCalls)
@@ -65,7 +65,7 @@ class CatalogViewModelTest {
             vm.refreshRequests.test {
                 testScheduler.runCurrent()
 
-                vm.onResumed()
+                vm.onResumed(canAutoRefresh = true)
                 testScheduler.runCurrent()
 
                 expectNoEvents()
@@ -93,7 +93,7 @@ class CatalogViewModelTest {
 
                 // should be ignored while loading
                 vm.requestManualRefresh()
-                vm.onResumed()
+                vm.onResumed(canAutoRefresh = true)
                 testScheduler.runCurrent()
                 expectNoEvents()
 
