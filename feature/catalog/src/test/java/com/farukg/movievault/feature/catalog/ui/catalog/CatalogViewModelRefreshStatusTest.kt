@@ -76,7 +76,7 @@ class CatalogViewModelRefreshStatusTest {
                 awaitItem()
 
                 vm.refreshRequests.test {
-                    vm.onResumed()
+                    vm.onResumed(canAutoRefresh = true)
                     testScheduler.advanceUntilIdle()
 
                     assertEquals(RefreshOrigin.Automatic, awaitItem())

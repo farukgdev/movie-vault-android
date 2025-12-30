@@ -7,7 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import com.farukg.movievault.data.local.db.MovieVaultDatabase
 import com.farukg.movievault.data.local.entity.FavoriteEntity
-import com.farukg.movievault.data.local.model.MovieWithFavorite
+import com.farukg.movievault.data.local.model.CatalogMovieRow
 import com.farukg.movievault.data.test.movieEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -66,12 +66,12 @@ class MovieDaoTest {
             )
 
         assertTrue(loadResult is PagingSource.LoadResult.Page)
-        val page = loadResult as PagingSource.LoadResult.Page<Int, MovieWithFavorite>
+        val page = loadResult as PagingSource.LoadResult.Page<Int, CatalogMovieRow>
 
         // filtered + ordered
-        assertEquals(listOf(2L, 3L, 1L), page.data.map { it.movie.id })
-        assertTrue(page.data.first { it.movie.id == 3L }.isFavorite)
-        assertTrue(page.data.first { it.movie.id == 2L }.isFavorite.not())
+        assertEquals(listOf(2L, 3L, 1L), page.data.map { it.id })
+        assertTrue(page.data.first { it.id == 3L }.isFavorite)
+        assertTrue(page.data.first { it.id == 2L }.isFavorite.not())
     }
 
     @Test

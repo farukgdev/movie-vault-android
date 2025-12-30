@@ -1,6 +1,7 @@
 package com.farukg.movievault.feature.catalog.ui.catalog
 
 import android.text.format.DateUtils
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,12 +18,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.SyncProblem
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -48,12 +51,14 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,20 +75,24 @@ import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.EmptyState
 import com.farukg.movievault.core.ui.ErrorState
-import com.farukg.movievault.core.ui.LoadingState
 import kotlin.math.max
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+private const val EMPTY_DEBOUNCE_MS = 300L
+private const val AUTO_RETRY_THROTTLE_MS = 3_000L
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CatalogScreen(
     movies: LazyPagingItems<MovieRowUi>,
+    listState: LazyListState,
     statusUi: CatalogStatusUi,
     refreshEvents: Flow<AppError>,
     isManualRefreshing: Boolean,
+    everHadItems: Boolean,
     onRetry: () -> Unit,
     onRefresh: () -> Unit,
     onOpenDetail: (movieId: Long) -> Unit,
@@ -98,6 +107,18 @@ fun CatalogScreen(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
     var showStatusSheet by remember { mutableStateOf(false) }
+
+    // prefer mediator load states when available
+    val mediator = movies.loadState.mediator
+    val refresh = mediator?.refresh ?: movies.loadState.refresh
+    val append = mediator?.append ?: movies.loadState.append
+
+    val hasItemsNow = movies.itemCount > 0
+
+    val emptyCandidate =
+        (refresh is LoadState.NotLoading) && !hasItemsNow && !everHadItems && statusUi.error == null
+
+    val showEmpty = rememberDelayedTrue(target = emptyCandidate, delayMs = EMPTY_DEBOUNCE_MS)
 
     LaunchedEffect(refreshEvents) {
         refreshEvents.collectLatest { err ->
@@ -138,19 +159,8 @@ fun CatalogScreen(
                     )
                 },
             ) {
-                val refresh = movies.loadState.refresh
-                val append = movies.loadState.append
-                val hasItems = movies.itemCount > 0
-
                 when {
-                    refresh is LoadState.Loading && !hasItems -> {
-                        LoadingState(
-                            modifier = Modifier.fillMaxSize(),
-                            message = "Loading catalog...",
-                        )
-                    }
-
-                    refresh is LoadState.Error && !hasItems -> {
+                    refresh is LoadState.Error && !hasItemsNow && !everHadItems -> {
                         val err = refresh.error.toAppError()
                         ErrorState(
                             modifier = Modifier.fillMaxSize(),
@@ -159,110 +169,41 @@ fun CatalogScreen(
                         )
                     }
 
-                    refresh is LoadState.NotLoading && !hasItems -> {
-                        val isBootstrapping =
-                            statusUi.lastUpdatedEpochMillis == null && statusUi.error == null
+                    statusUi.error != null && !hasItemsNow && !everHadItems -> {
+                        ErrorState(
+                            modifier = Modifier.fillMaxSize(),
+                            message = statusUi.error.userMessage(),
+                            onRetry = onRetry,
+                        )
+                    }
 
-                        when {
-                            isBootstrapping -> {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Text(
-                                        text = "Loading catalog...",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
+                    // (e.g. when coming back from Detail)
+                    !hasItemsNow && everHadItems -> {
+                        CatalogSkeletonList(modifier = Modifier.fillMaxSize())
+                    }
 
-                            statusUi.error != null -> {
-                                ErrorState(
-                                    modifier = Modifier.fillMaxSize(),
-                                    message = statusUi.error.userMessage(),
-                                    onRetry = onRetry,
-                                )
-                            }
+                    showEmpty -> {
+                        EmptyState(
+                            modifier = Modifier.fillMaxSize(),
+                            title = "No movies yet",
+                            message = "Pull down to refresh.",
+                            actionLabel = "Refresh",
+                            onAction = onRefresh,
+                        )
+                    }
 
-                            else -> {
-                                EmptyState(
-                                    modifier = Modifier.fillMaxSize(),
-                                    title = "No movies yet",
-                                    message = "Pull down to refresh.",
-                                    actionLabel = "Refresh",
-                                    onAction = onRefresh,
-                                )
-                            }
-                        }
+                    // while itemCount == 0, never render CatalogList
+                    !hasItemsNow -> {
+                        CatalogSkeletonList(modifier = Modifier.fillMaxSize())
                     }
 
                     else -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(vertical = 6.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            items(
-                                count = movies.itemCount,
-                                key = movies.itemKey { it.id },
-                                contentType = movies.itemContentType { "movie" },
-                            ) { index ->
-                                val row = movies[index]
-                                if (row == null) {
-                                    MovieRowPlaceholder()
-                                } else {
-                                    MovieRow(
-                                        title = row.title,
-                                        subtitle = row.subtitle,
-                                        onClick = { onOpenDetail(row.id) },
-                                    )
-                                }
-                            }
-
-                            if (append is LoadState.Loading || append is LoadState.Error) {
-                                item(key = "append_footer", contentType = "footer") {
-                                    Box(
-                                        modifier =
-                                            Modifier.fillMaxWidth()
-                                                .heightIn(min = 120.dp)
-                                                .padding(16.dp),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        when (append) {
-                                            is LoadState.Loading -> {
-                                                CircularProgressIndicator()
-                                            }
-
-                                            is LoadState.Error -> {
-                                                val err = append.error.toAppError()
-                                                Column(
-                                                    horizontalAlignment =
-                                                        Alignment.CenterHorizontally,
-                                                    verticalArrangement =
-                                                        Arrangement.spacedBy(12.dp),
-                                                ) {
-                                                    Text(
-                                                        text = err.userMessage(),
-                                                        textAlign = TextAlign.Center,
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        color =
-                                                            MaterialTheme.colorScheme
-                                                                .onSurfaceVariant,
-                                                        maxLines = 2,
-                                                        overflow = TextOverflow.Ellipsis,
-                                                    )
-                                                    TextButton(onClick = { movies.retry() }) {
-                                                        Text("Retry")
-                                                    }
-                                                }
-                                            }
-                                            else -> Unit
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        CatalogList(
+                            movies = movies,
+                            append = append,
+                            listState = listState,
+                            onOpenDetail = onOpenDetail,
+                        )
                     }
                 }
             }
@@ -298,6 +239,188 @@ fun CatalogScreen(
                 },
             )
         }
+    }
+}
+
+@Composable
+private fun rememberDelayedTrue(target: Boolean, delayMs: Long): Boolean {
+    var value by remember { mutableStateOf(false) }
+    LaunchedEffect(target) {
+        if (!target) value = false
+        else {
+            delay(delayMs)
+            value = true
+        }
+    }
+    return value
+}
+
+@Composable
+private fun CatalogSkeletonList(modifier: Modifier = Modifier, count: Int = 10) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        items(count, key = { "skeleton_$it" }) { MovieRowPlaceholder() }
+    }
+}
+
+@Composable
+private fun CatalogList(
+    movies: LazyPagingItems<MovieRowUi>,
+    append: LoadState,
+    listState: LazyListState,
+    onOpenDetail: (Long) -> Unit,
+) {
+    var stickyAppendError by remember { mutableStateOf<AppError?>(null) }
+    var stickyAtCount by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(append) {
+        if (append is LoadState.Error) {
+            stickyAppendError = append.error.toAppError()
+            stickyAtCount = movies.itemCount
+        }
+    }
+
+    LaunchedEffect(movies.itemCount) {
+        if (movies.itemCount > stickyAtCount) stickyAppendError = null
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        items(
+            count = movies.itemCount,
+            key = movies.itemKey { it.id },
+            contentType = movies.itemContentType { "movie" },
+        ) { index ->
+            val row = movies[index]
+            if (row == null) {
+                MovieRowPlaceholder()
+            } else {
+                MovieRow(
+                    title = row.title,
+                    subtitle = row.subtitle,
+                    onClick = { onOpenDetail(row.id) },
+                )
+            }
+        }
+
+        item(key = "append_footer", contentType = "footer") {
+            AppendFooter(
+                append = append,
+                stickyError = stickyAppendError,
+                onRetry = { movies.retry() },
+            )
+        }
+    }
+
+    AutoRetryAppendOnScroll(movies = movies, append = append, listState = listState)
+}
+
+@Composable
+private fun AppendFooter(
+    append: LoadState,
+    stickyError: AppError?,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier.fillMaxWidth().animateContentSize().padding(16.dp).heightIn(min = 24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            append is LoadState.Loading -> {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Text(
+                        text = "Loading more…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            append is LoadState.Error -> {
+                val err = append.error.toAppError()
+                AppendErrorBlock(err = err, onRetry = onRetry)
+            }
+
+            stickyError != null -> {
+                AppendErrorBlock(err = stickyError, onRetry = onRetry)
+            }
+
+            else -> {
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppendErrorBlock(err: AppError, onRetry: () -> Unit) {
+    val message =
+        if (err is AppError.Offline) {
+            "Offline — can't load more movies."
+        } else {
+            err.userMessage()
+        }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+    ) {
+        Text(
+            text = message,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        TextButton(onClick = onRetry) { Text("Retry") }
+    }
+}
+
+@Composable
+private fun AutoRetryAppendOnScroll(
+    movies: LazyPagingItems<MovieRowUi>,
+    append: LoadState,
+    listState: LazyListState,
+) {
+    var lastAutoRetryAt by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(movies, listState, append) {
+        snapshotFlow {
+                val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                val isScrolling = listState.isScrollInProgress
+                lastVisible to isScrolling
+            }
+            .collectLatest { (lastVisible, isScrolling) ->
+                if (isScrolling) return@collectLatest
+                val count = movies.itemCount
+                if (count == 0) return@collectLatest
+
+                val nearEnd = lastVisible >= (count - 2)
+                val offlineErr =
+                    (append as? LoadState.Error)?.error?.toAppError() as? AppError.Offline
+                if (!nearEnd || offlineErr == null) return@collectLatest
+
+                val now = System.currentTimeMillis()
+                if (now - lastAutoRetryAt < AUTO_RETRY_THROTTLE_MS) return@collectLatest
+
+                lastAutoRetryAt = now
+                movies.retry()
+            }
     }
 }
 
@@ -369,6 +492,7 @@ private fun CatalogStatusUi.toPresentation(): StatusPresentation {
     val contentDescription =
         when (icon) {
             CatalogStatusIcon.BackgroundRefreshing -> "Status: refreshing"
+            CatalogStatusIcon.Stale -> "Status: out of date"
             CatalogStatusIcon.Offline -> "Status: offline"
             CatalogStatusIcon.Error -> "Status: issue"
             CatalogStatusIcon.Ok -> "Status: up to date"
@@ -377,6 +501,7 @@ private fun CatalogStatusUi.toPresentation(): StatusPresentation {
     val headline =
         when {
             isRefreshing -> "Refreshing..."
+            icon == CatalogStatusIcon.Stale -> "Out of date"
             icon == CatalogStatusIcon.Offline -> "Offline"
             icon == CatalogStatusIcon.Error -> {
                 when (errorOrigin) {
@@ -412,6 +537,15 @@ private fun StatusIconButton(
             when (statusUi.icon) {
                 CatalogStatusIcon.BackgroundRefreshing -> {
                     CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                }
+
+                CatalogStatusIcon.Stale -> {
+                    Icon(
+                        imageVector = Icons.Outlined.Sync,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
 
                 CatalogStatusIcon.Offline -> {
@@ -460,6 +594,14 @@ private fun StatusSheetContent(
 
         val presentation = statusUi.toPresentation()
         Text(text = presentation.headline, style = MaterialTheme.typography.titleLarge)
+
+        if (statusUi.icon == CatalogStatusIcon.Stale && statusUi.error == null) {
+            Text(
+                text = "Catalog may be out of date. Refresh to get the latest popular movies.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         statusUi.error?.let { err ->
             Text(

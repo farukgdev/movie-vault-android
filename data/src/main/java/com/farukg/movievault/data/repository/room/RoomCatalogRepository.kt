@@ -17,8 +17,7 @@ import com.farukg.movievault.data.local.db.MovieVaultDatabase
 import com.farukg.movievault.data.local.entity.MovieEntity
 import com.farukg.movievault.data.local.mapper.hasDetailFields
 import com.farukg.movievault.data.local.mapper.toDomainDetail
-import com.farukg.movievault.data.local.mapper.toDomainMovie
-import com.farukg.movievault.data.local.model.MovieWithFavorite
+import com.farukg.movievault.data.local.model.CatalogMovieRow
 import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.model.MovieDetail
 import com.farukg.movievault.data.paging.CatalogRemoteMediator
@@ -59,7 +58,7 @@ constructor(
                         pageSize = TMDB_PAGE_SIZE,
                         initialLoadSize = TMDB_PAGE_SIZE,
                         prefetchDistance = TMDB_PAGE_SIZE / 2,
-                        enablePlaceholders = false,
+                        enablePlaceholders = true,
                     ),
                 remoteMediator =
                     CatalogRemoteMediator(
@@ -73,8 +72,15 @@ constructor(
             )
             .flow
             .map { pagingData ->
-                pagingData.map { row: MovieWithFavorite ->
-                    row.movie.toDomainMovie(isFavorite = row.isFavorite)
+                pagingData.map { row: CatalogMovieRow ->
+                    Movie(
+                        id = row.id,
+                        title = row.title,
+                        releaseYear = row.releaseYear,
+                        posterUrl = row.posterUrl,
+                        rating = row.rating,
+                        isFavorite = row.isFavorite,
+                    )
                 }
             }
 

@@ -16,7 +16,7 @@ import com.farukg.movievault.data.local.db.MovieVaultDatabase
 import com.farukg.movievault.data.local.entity.CacheMetadataEntity
 import com.farukg.movievault.data.local.entity.CatalogRemoteKeyEntity
 import com.farukg.movievault.data.local.entity.MovieEntity
-import com.farukg.movievault.data.local.model.MovieWithFavorite
+import com.farukg.movievault.data.local.model.CatalogMovieRow
 import com.farukg.movievault.data.remote.CatalogRemoteDataSource
 
 @OptIn(ExperimentalPagingApi::class)
@@ -26,7 +26,7 @@ class CatalogRemoteMediator(
     private val remoteKeysDao: CatalogRemoteKeysDao,
     private val cacheMetadataDao: CacheMetadataDao,
     private val remote: CatalogRemoteDataSource,
-) : RemoteMediator<Int, MovieWithFavorite>() {
+) : RemoteMediator<Int, CatalogMovieRow>() {
 
     override suspend fun initialize(): InitializeAction {
         val now = System.currentTimeMillis()
@@ -43,25 +43,24 @@ class CatalogRemoteMediator(
 
     override suspend fun load(
         loadType: LoadType,
-        state: PagingState<Int, MovieWithFavorite>,
+        state: PagingState<Int, CatalogMovieRow>,
     ): MediatorResult {
         val page =
             when (loadType) {
                 LoadType.REFRESH -> 1
 
                 LoadType.PREPEND -> {
-                    // We don’t support “load newer than page 1” for this feed.
                     return MediatorResult.Success(endOfPaginationReached = true)
                 }
 
                 LoadType.APPEND -> {
                     val last =
                         state.lastItemOrNull()
-                            ?: return MediatorResult.Success(endOfPaginationReached = true)
+                            ?: return MediatorResult.Success(endOfPaginationReached = false)
 
                     val key =
-                        remoteKeysDao.remoteKeyByMovieId(last.movie.id)
-                            ?: return MediatorResult.Success(endOfPaginationReached = true)
+                        remoteKeysDao.remoteKeyByMovieId(last.id)
+                            ?: return MediatorResult.Success(endOfPaginationReached = false)
 
                     key.nextKey ?: return MediatorResult.Success(endOfPaginationReached = true)
                 }
@@ -133,6 +132,3 @@ class CatalogRemoteMediator(
         }
     }
 }
-
-private fun PagingState<Int, MovieWithFavorite>.lastItemOrNull(): MovieWithFavorite? =
-    pages.lastOrNull { it.data.isNotEmpty() }?.data?.lastOrNull()

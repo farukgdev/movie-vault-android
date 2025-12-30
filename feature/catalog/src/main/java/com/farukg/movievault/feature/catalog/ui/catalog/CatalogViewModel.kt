@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
@@ -34,6 +35,17 @@ internal const val RESUME_REFRESH_THROTTLE_MS = 30_000L
 class CatalogViewModel
 @Inject
 constructor(private val repository: CatalogRepository, private val clock: Clock) : ViewModel() {
+
+    data class ScrollPosition(val index: Int = 0, val offset: Int = 0)
+
+    private val _scrollPosition = MutableStateFlow(ScrollPosition())
+    val scrollPosition: StateFlow<ScrollPosition> = _scrollPosition.asStateFlow()
+
+    fun onScrollPositionChanged(index: Int, offset: Int) {
+        val current = _scrollPosition.value
+        if (current.index == index && current.offset == offset) return
+        _scrollPosition.value = ScrollPosition(index, offset)
+    }
 
     // VM -> UI: call items.refresh()
     private val _refreshRequests = MutableSharedFlow<RefreshOrigin>(extraBufferCapacity = 1)
@@ -85,6 +97,9 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
         val inFlight: RefreshInFlight? = null,
         val history: RefreshHistory = RefreshHistory(),
         val showTopBarSpinner: Boolean = false,
+        val everHadItems: Boolean = false,
+        val isStale: Boolean = false,
+        val autoRefreshDeferred: Boolean = false,
     ) {
         val isRefreshLoading: Boolean
             get() = paging.isLoading
@@ -104,6 +119,12 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
     val manualRefreshing: StateFlow<Boolean> =
         state
             .map { it.isRefreshLoading && it.isManualRefresh }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val everHadItems: StateFlow<Boolean> =
+        state
+            .map { it.everHadItems }
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
@@ -132,7 +153,12 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
                 .distinctUntilChanged()
                 .collect { at ->
                     state.update { s ->
-                        s.copy(lastUpdatedEpochMillis = at, history = s.history.onSuccess(at))
+                        s.copy(
+                            lastUpdatedEpochMillis = at,
+                            history = s.history.onSuccess(at),
+                            isStale = false,
+                            autoRefreshDeferred = false,
+                        )
                     }
                 }
         }
@@ -142,20 +168,30 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
 
     // ----- Public API -----
 
-    fun onResumed() {
+    // conditional auto-refresh
+    fun onResumed(canAutoRefresh: Boolean) {
         val now = clock.now()
         if (now - lastResumeRefreshAtEpochMillis < RESUME_REFRESH_THROTTLE_MS) return
         lastResumeRefreshAtEpochMillis = now
 
         viewModelScope.launch {
             if (state.value.isRefreshLoading) return@launch
-            if (!repository.isCatalogStale(now)) return@launch
-            requestRefresh(RefreshOrigin.Automatic)
+
+            val stale = repository.isCatalogStale(now)
+
+            state.update { s ->
+                s.copy(isStale = stale, autoRefreshDeferred = stale && !canAutoRefresh)
+            }
+
+            if (stale && canAutoRefresh) {
+                requestRefresh(RefreshOrigin.Automatic)
+            }
         }
     }
 
     fun requestManualRefresh() {
         if (state.value.isRefreshLoading) return
+        state.update { s -> s.copy(autoRefreshDeferred = false) }
         requestRefresh(RefreshOrigin.Manual)
     }
 
@@ -164,7 +200,7 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
         val prev = state.value.paging
         val next = PagingRefreshSnapshot(isLoading = isLoading, error = error, hasItems = hasItems)
 
-        state.update { s -> s.copy(paging = next) }
+        state.update { s -> s.copy(paging = next, everHadItems = s.everHadItems || hasItems) }
 
         // new refresh error
         if (error != null && error != prev.error) {
@@ -227,6 +263,7 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
                 s.showTopBarSpinner -> CatalogStatusIcon.BackgroundRefreshing
                 failure?.error is AppError.Offline -> CatalogStatusIcon.Offline
                 failure != null -> CatalogStatusIcon.Error
+                s.autoRefreshDeferred || s.isStale -> CatalogStatusIcon.Stale
                 else -> CatalogStatusIcon.Ok
             }
 
@@ -247,6 +284,7 @@ enum class RefreshOrigin {
 
 enum class CatalogStatusIcon {
     Ok,
+    Stale,
     Offline,
     Error,
     BackgroundRefreshing,

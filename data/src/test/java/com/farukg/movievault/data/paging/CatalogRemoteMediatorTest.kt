@@ -15,7 +15,7 @@ import com.farukg.movievault.core.result.AppResult
 import com.farukg.movievault.data.cache.CacheKeys
 import com.farukg.movievault.data.local.db.MovieVaultDatabase
 import com.farukg.movievault.data.local.entity.CacheMetadataEntity
-import com.farukg.movievault.data.local.model.MovieWithFavorite
+import com.farukg.movievault.data.local.model.CatalogMovieRow
 import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.model.MovieDetail
 import com.farukg.movievault.data.model.MoviesPage
@@ -93,7 +93,7 @@ class CatalogRemoteMediatorTest {
 
         // pagingSource can read the newly cached page
         val page = loadCatalogPagingSource(loadSize = 50)
-        assertEquals((1L..20L).toList(), page.map { it.movie.id })
+        assertEquals((1L..20L).toList(), page.map { it.id })
     }
 
     @Test
@@ -126,7 +126,7 @@ class CatalogRemoteMediatorTest {
         assertEquals(39, db.movieDao().getMovie(40L)!!.popularRank)
 
         val all = loadCatalogPagingSource(loadSize = 100)
-        assertEquals((1L..40L).toList(), all.map { it.movie.id })
+        assertEquals((1L..40L).toList(), all.map { it.id })
 
         assertEquals(listOf(1, 2), remote.fetchPopularPageCalls)
     }
@@ -154,7 +154,7 @@ class CatalogRemoteMediatorTest {
         assertEquals(emptyList<Int>(), remote.fetchPopularPageCalls)
 
         val page = loadCatalogPagingSource(loadSize = 50)
-        assertEquals(listOf(1L, 2L), page.map { it.movie.id })
+        assertEquals(listOf(1L, 2L), page.map { it.id })
     }
 
     @Test
@@ -169,7 +169,7 @@ class CatalogRemoteMediatorTest {
         assertTrue((throwable as AppErrorException).error is AppError.Network)
     }
 
-    private suspend fun loadCatalogPagingSource(loadSize: Int): List<MovieWithFavorite> {
+    private suspend fun loadCatalogPagingSource(loadSize: Int): List<CatalogMovieRow> {
         val pagingSource = db.movieDao().catalogPagingSource()
         val result =
             pagingSource.load(
@@ -183,7 +183,7 @@ class CatalogRemoteMediatorTest {
         return result.data
     }
 
-    private fun emptyPagingState(): PagingState<Int, MovieWithFavorite> =
+    private fun emptyPagingState(): PagingState<Int, CatalogMovieRow> =
         PagingState(
             pages = emptyList(),
             anchorPosition = null,
