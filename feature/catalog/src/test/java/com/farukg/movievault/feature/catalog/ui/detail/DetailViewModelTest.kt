@@ -6,7 +6,6 @@ import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.result.AppResult
 import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.model.MovieDetail
-import com.farukg.movievault.data.repository.CatalogRefreshState
 import com.farukg.movievault.data.repository.CatalogRepository
 import com.farukg.movievault.data.repository.FavoritesRepository
 import com.farukg.movievault.feature.catalog.testing.MainDispatcherRule
@@ -192,8 +191,6 @@ class DetailViewModelTest {
         var lastRequestedId: Long? = null
             private set
 
-        override fun catalog() = flowOf(AppResult.Success(emptyList<Movie>()))
-
         override fun catalogPaging(): Flow<PagingData<Movie>> = flowOf(PagingData.empty())
 
         override fun movieDetail(movieId: Long): Flow<AppResult<MovieDetail>> {
@@ -202,17 +199,9 @@ class DetailViewModelTest {
             return detailFlow
         }
 
-        override fun catalogRefreshState(): Flow<CatalogRefreshState> =
-            flowOf(
-                CatalogRefreshState(
-                    lastUpdatedEpochMillis = null,
-                    isRefreshing = false,
-                    lastRefreshError = null,
-                )
-            )
+        override fun catalogLastUpdatedEpochMillis(): Flow<Long?> = flowOf(null)
 
-        override suspend fun refreshCatalog(force: Boolean): AppResult<Unit> =
-            AppResult.Success(Unit)
+        override suspend fun isCatalogStale(nowEpochMillis: Long): Boolean = false
     }
 
     private class TestFavoritesRepository : FavoritesRepository {

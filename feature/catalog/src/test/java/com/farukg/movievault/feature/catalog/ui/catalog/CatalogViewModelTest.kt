@@ -1,164 +1,129 @@
 package com.farukg.movievault.feature.catalog.ui.catalog
 
 import androidx.paging.PagingData
-import app.cash.turbine.ReceiveTurbine
 import app.cash.turbine.test
 import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.result.AppResult
 import com.farukg.movievault.core.time.Clock
 import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.model.MovieDetail
-import com.farukg.movievault.data.repository.CatalogRefreshState
 import com.farukg.movievault.data.repository.CatalogRepository
 import com.farukg.movievault.feature.catalog.testing.MainDispatcherRule
-import java.util.Locale
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.runTest
-import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class CatalogViewModelTest {
 
     @get:Rule val mainDispatcherRule = MainDispatcherRule()
 
-    private lateinit var defaultLocale: Locale
-
-    @Before
-    fun setUp() {
-        defaultLocale = Locale.getDefault()
-        Locale.setDefault(Locale.US)
-    }
-
-    @After
-    fun tearDown() {
-        Locale.setDefault(defaultLocale)
-    }
-
     @Test
-    fun `maps success non-empty to Content with expected row mapping`() =
+    fun `onResumed emits Automatic refresh request only when stale and not throttled`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val repo =
-                TestCatalogRepository(
-                    initial =
-                        AppResult.Success(listOf(Movie(id = 1, title = "A", releaseYear = 2024)))
-                )
-
+            val repo = FakeCatalogRepository(stale = true)
             val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
 
-            vm.uiState.test {
-                val state = awaitSettled(testScheduler)
-                assertEquals(
-                    CatalogUiState.Content(
-                        movies = listOf(MovieRowUi(id = 1, title = "A", subtitle = "2024"))
-                    ),
-                    state,
-                )
-                cancelAndIgnoreRemainingEvents()
-            }
-        }
-
-    @Test
-    fun `maps success empty to Empty`() =
-        runTest(mainDispatcherRule.dispatcher) {
-            val repo = TestCatalogRepository(initial = AppResult.Success(emptyList()))
-            val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
-
-            vm.uiState.test {
-                val state = awaitSettled(testScheduler)
-                assertEquals(CatalogUiState.Empty, state)
-                cancelAndIgnoreRemainingEvents()
-            }
-        }
-
-    @Test
-    fun `maps error to Error with same AppError instance`() =
-        runTest(mainDispatcherRule.dispatcher) {
-            val err = AppError.Network()
-            val repo = TestCatalogRepository(initial = AppResult.Error(err))
-            val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
-
-            vm.uiState.test {
-                val state = awaitSettled(testScheduler)
-
-                assertTrue(state is CatalogUiState.Error)
-                assertEquals(err, (state as CatalogUiState.Error).error)
-
-                cancelAndIgnoreRemainingEvents()
-            }
-        }
-
-    @Test
-    fun `emits new UiState when repository flow updates`() =
-        runTest(mainDispatcherRule.dispatcher) {
-            val repo = TestCatalogRepository(initial = AppResult.Success(emptyList()))
-            val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
-
-            vm.uiState.test {
-                assertEquals(CatalogUiState.Empty, awaitSettled(testScheduler))
-
-                repo.emit(AppResult.Success(listOf(Movie(id = 2, title = "B", releaseYear = 2023))))
+            vm.refreshRequests.test {
                 testScheduler.runCurrent()
 
-                assertEquals(
-                    CatalogUiState.Content(
-                        movies = listOf(MovieRowUi(id = 2, title = "B", subtitle = "2023"))
-                    ),
-                    awaitItem(),
-                )
+                vm.onResumed()
+                testScheduler.runCurrent()
+                assertEquals(RefreshOrigin.Automatic, awaitItem())
+                assertEquals(1, repo.isStaleCalls)
+
+                // within throttle window
+                vm.onResumed()
+                testScheduler.runCurrent()
+                expectNoEvents()
+                assertEquals(1, repo.isStaleCalls)
+
+                testScheduler.advanceTimeBy(RESUME_REFRESH_THROTTLE_MS)
+                testScheduler.runCurrent()
+
+                vm.onResumed()
+                testScheduler.runCurrent()
+                assertEquals(RefreshOrigin.Automatic, awaitItem())
+                assertEquals(2, repo.isStaleCalls)
 
                 cancelAndIgnoreRemainingEvents()
             }
         }
 
-    private suspend fun ReceiveTurbine<CatalogUiState>.awaitSettled(
-        scheduler: TestCoroutineScheduler
-    ): CatalogUiState {
-        val first = awaitItem()
-        if (first != CatalogUiState.Loading) return first
+    @Test
+    fun `onResumed does not emit when not stale`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val repo = FakeCatalogRepository(stale = false)
+            val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
 
-        scheduler.advanceUntilIdle()
-        return awaitItem()
-    }
+            vm.refreshRequests.test {
+                testScheduler.runCurrent()
 
-    private class SchedulerClock(private val scheduler: TestCoroutineScheduler) : Clock {
-        @OptIn(ExperimentalCoroutinesApi::class) override fun now(): Long = scheduler.currentTime
-    }
+                vm.onResumed()
+                testScheduler.runCurrent()
 
-    private class TestCatalogRepository(initial: AppResult<List<Movie>>) : CatalogRepository {
+                expectNoEvents()
+                assertEquals(1, repo.isStaleCalls)
 
-        private val catalogFlow = MutableStateFlow(initial)
-
-        fun emit(value: AppResult<List<Movie>>) {
-            catalogFlow.value = value
+                cancelAndIgnoreRemainingEvents()
+            }
         }
 
-        override fun catalog(): Flow<AppResult<List<Movie>>> = catalogFlow
+    @Test
+    fun `ignores refresh requests while paging refresh is loading`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val repo = FakeCatalogRepository(stale = true)
+            val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
+
+            vm.refreshRequests.test {
+                testScheduler.runCurrent()
+
+                vm.requestManualRefresh()
+                testScheduler.runCurrent()
+                assertEquals(RefreshOrigin.Manual, awaitItem())
+
+                vm.onPagingRefreshSnapshot(isLoading = true, error = null, hasItems = true)
+                testScheduler.runCurrent()
+
+                // should be ignored while loading
+                vm.requestManualRefresh()
+                vm.onResumed()
+                testScheduler.runCurrent()
+                expectNoEvents()
+
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    private class SchedulerClock(private val scheduler: TestCoroutineScheduler) : Clock {
+        private val baseEpochMillis = 1_700_000_000_000L
+
+        override fun now(): Long = baseEpochMillis + scheduler.currentTime
+    }
+
+    private class FakeCatalogRepository(stale: Boolean) : CatalogRepository {
+        var staleFlag: Boolean = stale
+        var isStaleCalls: Int = 0
+            private set
 
         override fun catalogPaging(): Flow<PagingData<Movie>> = flowOf(PagingData.empty())
 
         override fun movieDetail(movieId: Long): Flow<AppResult<MovieDetail>> =
             flowOf(AppResult.Error(AppError.Http(404)))
 
-        private val refreshStateFlow =
-            MutableStateFlow(
-                CatalogRefreshState(
-                    lastUpdatedEpochMillis = null,
-                    isRefreshing = false,
-                    lastRefreshError = null,
-                )
-            )
+        private val lastUpdated = MutableStateFlow<Long?>(null)
 
-        override fun catalogRefreshState(): Flow<CatalogRefreshState> = refreshStateFlow
+        override fun catalogLastUpdatedEpochMillis(): Flow<Long?> = lastUpdated
 
-        override suspend fun refreshCatalog(force: Boolean): AppResult<Unit> =
-            AppResult.Success(Unit)
+        override suspend fun isCatalogStale(nowEpochMillis: Long): Boolean {
+            isStaleCalls++
+            return staleFlag
+        }
     }
 }

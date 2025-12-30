@@ -2,12 +2,13 @@ package com.farukg.movievault.feature.catalog.ui.catalog
 
 import androidx.paging.PagingData
 import app.cash.turbine.test
+import app.cash.turbine.testIn
+import app.cash.turbine.turbineScope
 import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.result.AppResult
 import com.farukg.movievault.core.time.Clock
 import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.model.MovieDetail
-import com.farukg.movievault.data.repository.CatalogRefreshState
 import com.farukg.movievault.data.repository.CatalogRepository
 import com.farukg.movievault.feature.catalog.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,47 +29,99 @@ class CatalogViewModelRefreshStatusTest {
     @get:Rule val mainDispatcherRule = MainDispatcherRule()
 
     @Test
-    fun `initial background refresh failure sets Offline icon and Automatic origin`() =
+    fun `manual refresh failure emits refreshEvents and sets Manual origin`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val repo =
-                FakeCatalogRepository().apply {
-                    enqueueRefreshResult(AppResult.Error(AppError.Offline()))
-                }
+            val repo = FakeCatalogRepository(stale = false)
+            val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
 
+            turbineScope {
+                val statusTurbine = vm.statusUi.testIn(this)
+                val requestsTurbine = vm.refreshRequests.testIn(this)
+                val eventsTurbine = vm.refreshEvents.testIn(this)
+
+                testScheduler.runCurrent()
+
+                statusTurbine.awaitItem()
+
+                vm.requestManualRefresh()
+                testScheduler.runCurrent()
+                assertEquals(RefreshOrigin.Manual, requestsTurbine.awaitItem())
+
+                vm.onPagingRefreshSnapshot(isLoading = true, error = null, hasItems = true)
+                testScheduler.runCurrent()
+
+                val err = AppError.Network()
+                vm.onPagingRefreshSnapshot(isLoading = false, error = err, hasItems = true)
+                testScheduler.runCurrent()
+
+                assertEquals(err, eventsTurbine.awaitItem())
+
+                assertEquals(CatalogStatusIcon.Error, vm.statusUi.value.icon)
+                assertEquals(err, vm.statusUi.value.error)
+                assertEquals(RefreshOrigin.Manual, vm.statusUi.value.errorOrigin)
+
+                statusTurbine.cancelAndIgnoreRemainingEvents()
+                requestsTurbine.cancelAndIgnoreRemainingEvents()
+                eventsTurbine.cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `automatic refresh failure sets Offline icon and Automatic origin`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val repo = FakeCatalogRepository(stale = true)
             val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
 
             vm.statusUi.test {
-                testScheduler.advanceUntilIdle()
+                awaitItem()
 
-                assertEquals(listOf(false), repo.refreshForceCalls)
+                vm.refreshRequests.test {
+                    vm.onResumed()
+                    testScheduler.advanceUntilIdle()
 
-                assertEquals(CatalogStatusIcon.Offline, vm.statusUi.value.icon)
-                assertTrue(vm.statusUi.value.error is AppError.Offline)
-                assertEquals(RefreshOrigin.Automatic, vm.statusUi.value.errorOrigin)
+                    assertEquals(RefreshOrigin.Automatic, awaitItem())
+
+                    vm.onPagingRefreshSnapshot(isLoading = true, error = null, hasItems = false)
+                    testScheduler.runCurrent()
+
+                    vm.onPagingRefreshSnapshot(
+                        isLoading = false,
+                        error = AppError.Offline(),
+                        hasItems = false,
+                    )
+                    testScheduler.runCurrent()
+
+                    assertEquals(CatalogStatusIcon.Offline, vm.statusUi.value.icon)
+                    assertTrue(vm.statusUi.value.error is AppError.Offline)
+                    assertEquals(RefreshOrigin.Automatic, vm.statusUi.value.errorOrigin)
+
+                    cancelAndIgnoreRemainingEvents()
+                }
 
                 cancelAndIgnoreRemainingEvents()
             }
         }
 
     @Test
-    fun `success after failure clears current error and returns to Ok`() =
+    fun `success signal clears previous error`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val repo =
-                FakeCatalogRepository().apply {
-                    enqueueRefreshResult(AppResult.Error(AppError.Network()))
-                }
-
+            val repo = FakeCatalogRepository(stale = true)
             val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
 
             vm.statusUi.test {
-                testScheduler.advanceUntilIdle()
+                awaitItem()
+
+                vm.onPagingRefreshSnapshot(
+                    isLoading = false,
+                    error = AppError.Network(),
+                    hasItems = false,
+                )
+                testScheduler.runCurrent()
 
                 assertEquals(CatalogStatusIcon.Error, vm.statusUi.value.icon)
                 assertTrue(vm.statusUi.value.error is AppError.Network)
-                assertEquals(RefreshOrigin.Automatic, vm.statusUi.value.errorOrigin)
 
-                repo.enqueueRefreshResult(AppResult.Success(Unit))
-                vm.onResumed()
+                repo.lastUpdatedFlow.value = 123L
                 testScheduler.advanceUntilIdle()
 
                 assertEquals(CatalogStatusIcon.Ok, vm.statusUi.value.icon)
@@ -80,65 +133,26 @@ class CatalogViewModelRefreshStatusTest {
         }
 
     @Test
-    fun `manual refresh failure emits refresh event and sets Error icon with Manual origin`() =
+    fun `background spinner shows after delay and stays for min duration`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val repo =
-                FakeCatalogRepository().apply { enqueueRefreshResult(AppResult.Success(Unit)) }
-
+            val repo = FakeCatalogRepository(stale = false)
             val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
 
             vm.statusUi.test {
-                vm.refreshEvents.test {
-                    testScheduler.advanceUntilIdle()
+                awaitItem()
 
-                    repo.enqueueRefreshResult(AppResult.Error(AppError.Network()))
-
-                    vm.onUserRefresh()
-                    testScheduler.advanceUntilIdle()
-
-                    val emitted = awaitItem()
-                    assertTrue(emitted is AppError.Network)
-
-                    assertEquals(CatalogStatusIcon.Error, vm.statusUi.value.icon)
-                    assertTrue(vm.statusUi.value.error is AppError.Network)
-                    assertEquals(RefreshOrigin.Manual, vm.statusUi.value.errorOrigin)
-
-                    assertTrue(repo.refreshForceCalls.contains(true)) // manual
-
-                    cancelAndIgnoreRemainingEvents()
-                }
-
-                cancelAndIgnoreRemainingEvents()
-            }
-        }
-
-    @Test
-    fun `background spinner shows only after delay and stays visible for min duration`() =
-        runTest(mainDispatcherRule.dispatcher) {
-            val repo =
-                FakeCatalogRepository().apply { enqueueRefreshResult(AppResult.Success(Unit)) }
-
-            val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
-
-            vm.statusUi.test {
-                testScheduler.advanceUntilIdle()
-
-                repo.refreshStateFlow.value =
-                    repo.refreshStateFlow.value.copy(isRefreshing = true, lastRefreshError = null)
+                vm.onPagingRefreshSnapshot(isLoading = true, error = null, hasItems = true)
                 testScheduler.runCurrent()
 
-                // before 150ms delay: icon is not spinner
                 testScheduler.advanceTimeBy(STATUS_SPINNER_SHOW_DELAY_MS - 1)
                 testScheduler.runCurrent()
                 assertEquals(CatalogStatusIcon.Ok, vm.statusUi.value.icon)
 
-                // after 150ms icon should be BackgroundRefreshing
                 testScheduler.advanceTimeBy(1)
                 testScheduler.runCurrent()
                 assertEquals(CatalogStatusIcon.BackgroundRefreshing, vm.statusUi.value.icon)
 
-                // stop refreshing, icon should remain for minVisibleMs
-                repo.refreshStateFlow.value = repo.refreshStateFlow.value.copy(isRefreshing = false)
+                vm.onPagingRefreshSnapshot(isLoading = false, error = null, hasItems = true)
                 testScheduler.runCurrent()
                 assertEquals(CatalogStatusIcon.BackgroundRefreshing, vm.statusUi.value.icon)
 
@@ -157,57 +171,24 @@ class CatalogViewModelRefreshStatusTest {
     @Test
     fun `background spinner never shows if refresh ends before delay`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val repo =
-                FakeCatalogRepository().apply { enqueueRefreshResult(AppResult.Success(Unit)) }
-
+            val repo = FakeCatalogRepository(stale = false)
             val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
 
             vm.statusUi.test {
-                testScheduler.advanceUntilIdle()
+                awaitItem()
 
-                repo.refreshStateFlow.value = repo.refreshStateFlow.value.copy(isRefreshing = true)
+                vm.onPagingRefreshSnapshot(isLoading = true, error = null, hasItems = true)
                 testScheduler.runCurrent()
 
                 testScheduler.advanceTimeBy(STATUS_SPINNER_SHOW_DELAY_MS - 1)
-                repo.refreshStateFlow.value = repo.refreshStateFlow.value.copy(isRefreshing = false)
-                testScheduler.advanceUntilIdle()
-
+                testScheduler.runCurrent()
                 assertEquals(CatalogStatusIcon.Ok, vm.statusUi.value.icon)
 
-                cancelAndIgnoreRemainingEvents()
-            }
-        }
+                vm.onPagingRefreshSnapshot(isLoading = false, error = null, hasItems = true)
 
-    @Test
-    fun `onResumed is throttled within 30 seconds`() =
-        runTest(mainDispatcherRule.dispatcher) {
-            val repo =
-                FakeCatalogRepository().apply { enqueueRefreshResult(AppResult.Success(Unit)) }
-
-            val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
-
-            vm.statusUi.test {
-                testScheduler.advanceUntilIdle()
-                assertEquals(1, repo.refreshCallCount)
-
-                // first resume should refresh
-                repo.enqueueRefreshResult(AppResult.Success(Unit))
-                vm.onResumed()
-                testScheduler.advanceUntilIdle()
-                assertEquals(2, repo.refreshCallCount)
-
-                // resume again (< 30s) should be ignored
-                repo.enqueueRefreshResult(AppResult.Success(Unit))
-                vm.onResumed()
-                testScheduler.advanceUntilIdle()
-                assertEquals(2, repo.refreshCallCount)
-
-                // after 30s should refresh again
-                testScheduler.advanceTimeBy(30_000)
-                repo.enqueueRefreshResult(AppResult.Success(Unit))
-                vm.onResumed()
-                testScheduler.advanceUntilIdle()
-                assertEquals(3, repo.refreshCallCount)
+                testScheduler.advanceTimeBy(2)
+                testScheduler.runCurrent()
+                assertEquals(CatalogStatusIcon.Ok, vm.statusUi.value.icon)
 
                 cancelAndIgnoreRemainingEvents()
             }
@@ -216,47 +197,20 @@ class CatalogViewModelRefreshStatusTest {
     private class SchedulerClock(private val scheduler: TestCoroutineScheduler) : Clock {
         private val baseEpochMillis = 1_700_000_000_000L
 
-        @OptIn(ExperimentalCoroutinesApi::class)
         override fun now(): Long = baseEpochMillis + scheduler.currentTime
     }
 
-    private class FakeCatalogRepository : CatalogRepository {
-        private val catalogFlow =
-            MutableStateFlow<AppResult<List<Movie>>>(AppResult.Success(emptyList()))
+    private class FakeCatalogRepository(stale: Boolean) : CatalogRepository {
+        var staleFlag: Boolean = stale
+        val lastUpdatedFlow = MutableStateFlow<Long?>(null)
 
-        val refreshStateFlow =
-            MutableStateFlow(
-                CatalogRefreshState(
-                    lastUpdatedEpochMillis = null,
-                    isRefreshing = false,
-                    lastRefreshError = null,
-                )
-            )
-
-        val refreshForceCalls = mutableListOf<Boolean>()
-        private val refreshResults = ArrayDeque<AppResult<Unit>>()
-
-        var refreshCallCount: Int = 0
-            private set
-
-        fun enqueueRefreshResult(result: AppResult<Unit>) {
-            refreshResults.addLast(result)
-        }
-
-        override fun catalog(): Flow<AppResult<List<Movie>>> = catalogFlow
+        override fun catalogLastUpdatedEpochMillis(): Flow<Long?> = lastUpdatedFlow
 
         override fun catalogPaging(): Flow<PagingData<Movie>> = flowOf(PagingData.empty())
 
         override fun movieDetail(movieId: Long): Flow<AppResult<MovieDetail>> =
             flowOf(AppResult.Error(AppError.Http(404)))
 
-        override fun catalogRefreshState(): Flow<CatalogRefreshState> = refreshStateFlow
-
-        override suspend fun refreshCatalog(force: Boolean): AppResult<Unit> {
-            refreshCallCount++
-            refreshForceCalls += force
-            return if (refreshResults.isEmpty()) AppResult.Success(Unit)
-            else refreshResults.removeFirst()
-        }
+        override suspend fun isCatalogStale(nowEpochMillis: Long): Boolean = staleFlag
     }
 }

@@ -12,15 +12,12 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface MovieDao {
 
-    @Query("SELECT * FROM movies WHERE popularRank >= 0 ORDER BY popularRank ASC")
-    fun observeCatalog(): Flow<List<MovieEntity>>
-
     @Query(
         """
         SELECT m.*, EXISTS(SELECT 1 FROM favorites f WHERE f.movieId = m.id) AS isFavorite
         FROM movies m
         WHERE m.popularRank >= 0
-        ORDER BY m.popularRank ASC
+        ORDER BY m.popularRank ASC, m.id ASC
         """
     )
     fun catalogPagingSource(): PagingSource<Int, MovieWithFavorite>

@@ -12,12 +12,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyItemScope
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -60,12 +59,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.itemContentType
+import androidx.paging.compose.itemKey
 import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.EmptyState
 import com.farukg.movievault.core.ui.ErrorState
+import com.farukg.movievault.core.ui.LoadingState
 import kotlin.math.max
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -75,7 +80,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CatalogScreen(
-    uiState: CatalogUiState,
+    movies: LazyPagingItems<MovieRowUi>,
     statusUi: CatalogStatusUi,
     refreshEvents: Flow<AppError>,
     isManualRefreshing: Boolean,
@@ -133,64 +138,129 @@ fun CatalogScreen(
                     )
                 },
             ) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 6.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    when (uiState) {
-                        CatalogUiState.Loading -> {
-                            item { Spacer(Modifier.fillParentMaxSize()) }
-                        }
+                val refresh = movies.loadState.refresh
+                val append = movies.loadState.append
+                val hasItems = movies.itemCount > 0
 
-                        is CatalogUiState.Error -> {
-                            item {
-                                FullScreenCentered {
-                                    ErrorState(
-                                        message = uiState.error.userMessage(),
-                                        onRetry = onRetry,
+                when {
+                    refresh is LoadState.Loading && !hasItems -> {
+                        LoadingState(
+                            modifier = Modifier.fillMaxSize(),
+                            message = "Loading catalog...",
+                        )
+                    }
+
+                    refresh is LoadState.Error && !hasItems -> {
+                        val err = refresh.error.toAppError()
+                        ErrorState(
+                            modifier = Modifier.fillMaxSize(),
+                            message = err.userMessage(),
+                            onRetry = onRetry,
+                        )
+                    }
+
+                    refresh is LoadState.NotLoading && !hasItems -> {
+                        val isBootstrapping =
+                            statusUi.lastUpdatedEpochMillis == null && statusUi.error == null
+
+                        when {
+                            isBootstrapping -> {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = "Loading catalog...",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
-                        }
 
-                        CatalogUiState.Empty -> {
-                            val isBootstrapping =
-                                statusUi.lastUpdatedEpochMillis == null && statusUi.error == null
+                            statusUi.error != null -> {
+                                ErrorState(
+                                    modifier = Modifier.fillMaxSize(),
+                                    message = statusUi.error.userMessage(),
+                                    onRetry = onRetry,
+                                )
+                            }
 
-                            item {
-                                FullScreenCentered {
-                                    when {
-                                        isBootstrapping ->
-                                            Text(
-                                                text = "Loading catalog...",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        statusUi.error != null ->
-                                            ErrorState(
-                                                message = statusUi.error.userMessage(),
-                                                onRetry = onRetry,
-                                            )
-                                        else ->
-                                            EmptyState(
-                                                title = "No movies yet",
-                                                message = "Pull down to refresh.",
-                                                actionLabel = "Try again",
-                                                onAction = onRefresh,
-                                            )
-                                    }
-                                }
+                            else -> {
+                                EmptyState(
+                                    modifier = Modifier.fillMaxSize(),
+                                    title = "No movies yet",
+                                    message = "Pull down to refresh.",
+                                    actionLabel = "Refresh",
+                                    onAction = onRefresh,
+                                )
                             }
                         }
+                    }
 
-                        is CatalogUiState.Content -> {
-                            items(uiState.movies, key = { it.id }) { movie ->
-                                MovieRow(
-                                    title = movie.title,
-                                    subtitle = movie.subtitle,
-                                    onClick = { onOpenDetail(movie.id) },
-                                )
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(
+                                count = movies.itemCount,
+                                key = movies.itemKey { it.id },
+                                contentType = movies.itemContentType { "movie" },
+                            ) { index ->
+                                val row = movies[index]
+                                if (row == null) {
+                                    MovieRowPlaceholder()
+                                } else {
+                                    MovieRow(
+                                        title = row.title,
+                                        subtitle = row.subtitle,
+                                        onClick = { onOpenDetail(row.id) },
+                                    )
+                                }
+                            }
+
+                            if (append is LoadState.Loading || append is LoadState.Error) {
+                                item(key = "append_footer", contentType = "footer") {
+                                    Box(
+                                        modifier =
+                                            Modifier.fillMaxWidth()
+                                                .heightIn(min = 120.dp)
+                                                .padding(16.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        when (append) {
+                                            is LoadState.Loading -> {
+                                                CircularProgressIndicator()
+                                            }
+
+                                            is LoadState.Error -> {
+                                                val err = append.error.toAppError()
+                                                Column(
+                                                    horizontalAlignment =
+                                                        Alignment.CenterHorizontally,
+                                                    verticalArrangement =
+                                                        Arrangement.spacedBy(12.dp),
+                                                ) {
+                                                    Text(
+                                                        text = err.userMessage(),
+                                                        textAlign = TextAlign.Center,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        color =
+                                                            MaterialTheme.colorScheme
+                                                                .onSurfaceVariant,
+                                                        maxLines = 2,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                    )
+                                                    TextButton(onClick = { movies.retry() }) {
+                                                        Text("Retry")
+                                                    }
+                                                }
+                                            }
+                                            else -> Unit
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -421,17 +491,6 @@ private fun StatusSheetContent(
 }
 
 @Composable
-private fun LazyItemScope.FullScreenCentered(content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier.fillParentMaxSize().padding(vertical = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        content()
-    }
-}
-
-@Composable
 private fun MovieRow(
     title: String,
     subtitle: String,
@@ -469,6 +528,46 @@ private fun MovieRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MovieRowPlaceholder(modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors =
+            CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            ),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Spacer(
+                modifier =
+                    Modifier.size(width = 52.dp, height = 72.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Spacer(
+                    Modifier.fillMaxWidth(0.6f)
+                        .height(18.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+                Spacer(Modifier.height(8.dp))
+                Spacer(
+                    Modifier.fillMaxWidth(0.4f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
             }
         }
     }

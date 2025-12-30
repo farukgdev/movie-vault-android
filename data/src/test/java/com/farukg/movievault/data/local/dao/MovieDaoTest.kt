@@ -42,25 +42,7 @@ class MovieDaoTest {
     }
 
     @Test
-    fun observeCatalog_returns_only_catalog_rows_ordered_by_popularRank() = runTest {
-        movieDao.upsertAll(
-            listOf(
-                movieEntity(id = 1, title = "A", popularRank = 2),
-                movieEntity(id = 2, title = "B", popularRank = 0),
-                movieEntity(id = 3, title = "C", popularRank = 1),
-                movieEntity(id = 99, title = "DetailOnly", popularRank = -1),
-            )
-        )
-
-        movieDao.observeCatalog().test {
-            val first = awaitItem()
-            assertEquals(listOf(2L, 3L, 1L), first.map { it.id })
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun catalogPagingSource_filters_rank_and_computes_isFavorite() = runTest {
+    fun catalogPagingSource_filters_rank_orders_by_popularRank_and_computes_isFavorite() = runTest {
         movieDao.upsertAll(
             listOf(
                 movieEntity(id = 1, title = "A", popularRank = 2),
@@ -88,8 +70,8 @@ class MovieDaoTest {
 
         // filtered + ordered
         assertEquals(listOf(2L, 3L, 1L), page.data.map { it.movie.id })
-        val rowFor3 = page.data.first { it.movie.id == 3L }
-        assertTrue(rowFor3.isFavorite)
+        assertTrue(page.data.first { it.movie.id == 3L }.isFavorite)
+        assertTrue(page.data.first { it.movie.id == 2L }.isFavorite.not())
     }
 
     @Test

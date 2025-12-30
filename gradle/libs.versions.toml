@@ -28,8 +28,7 @@ room = "2.8.4"
 androidxTestCore = "1.7.0"
 robolectric = "4.16"
 roomPaging = "2.8.4"
-pagingCommon = "3.4.0-beta01"
-pagingRuntime = "3.4.0-beta01"
+paging = "3.4.0-beta01"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -73,8 +72,9 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 androidx-room-paging = { group = "androidx.room", name = "room-paging", version.ref = "roomPaging" }
-androidx-paging-common = { group = "androidx.paging", name = "paging-common", version.ref = "pagingCommon" }
-androidx-paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "pagingRuntime" }
+androidx-paging-common = { group = "androidx.paging", name = "paging-common", version.ref = "paging" }
+androidx-paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
+androidx-paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "paging" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
