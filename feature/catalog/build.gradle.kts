@@ -39,6 +39,7 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":data"))
 
+    implementation(libs.coil.compose)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)

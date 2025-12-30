@@ -12,6 +12,7 @@ sealed interface DetailUiState {
         val metaPrimary: String,
         val metaSecondary: String,
         val overview: String,
+        val posterUrl: String?,
         val isFavorite: Boolean,
     ) : DetailUiState
 }
