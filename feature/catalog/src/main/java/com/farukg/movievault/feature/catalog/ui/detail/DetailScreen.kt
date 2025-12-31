@@ -14,8 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.ErrorState
 import com.farukg.movievault.core.ui.LoadingState
+import com.farukg.movievault.core.ui.components.MovieVaultCard
 import com.farukg.movievault.feature.catalog.ui.components.MoviePoster
 import com.farukg.movievault.feature.catalog.ui.components.detailPosterHeightDp
 
@@ -81,13 +80,7 @@ fun DetailScreen(
 
             is DetailUiState.Content -> {
                 Column(modifier = bodyModifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors =
-                            CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            ),
-                    ) {
+                    MovieVaultCard(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                             verticalAlignment = Alignment.Top,
@@ -128,13 +121,7 @@ fun DetailScreen(
                         }
                     }
 
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors =
-                            CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                            ),
-                    ) {
+                    MovieVaultCard(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             text = uiState.overview.ifBlank { "No overview available." },
                             style = MaterialTheme.typography.bodyMedium,
