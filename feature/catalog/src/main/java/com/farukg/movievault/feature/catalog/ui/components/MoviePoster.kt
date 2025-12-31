@@ -8,16 +8,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -27,35 +21,45 @@ import coil3.compose.AsyncImagePainter
 @Composable
 fun MoviePoster(
     posterUrl: String?,
+    fallbackPosterUrl: String? = null,
     contentDescription: String?,
     modifier: Modifier,
     cornerRadius: Dp = 12.dp,
 ) {
-    val shape = remember(cornerRadius) { RoundedCornerShape(cornerRadius) }
-    val transparentPainter = remember { ColorPainter(Color.Transparent) }
+    val primary = posterUrl?.trim().takeUnless { it.isNullOrBlank() }
+    val fallback = fallbackPosterUrl?.trim().takeUnless { it.isNullOrBlank() }
 
-    var isError by remember(posterUrl) { mutableStateOf(false) }
+    val shape = remember(cornerRadius) { RoundedCornerShape(cornerRadius) }
+
+    var activeUrl by remember(primary, fallback) { mutableStateOf(primary) }
+    var isError by remember(primary, fallback) { mutableStateOf(false) }
 
     Box(
         modifier = modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
-        if (posterUrl != null) {
+        if (activeUrl != null) {
             AsyncImage(
-                model = posterUrl,
+                model = activeUrl,
                 contentDescription = contentDescription,
                 modifier = Modifier.matchParentSize(),
                 contentScale = ContentScale.Crop,
-                placeholder = transparentPainter,
-                error = transparentPainter,
-                fallback = transparentPainter,
-                onLoading = { isError = false },
-                onSuccess = { isError = false },
-                onError = { _: AsyncImagePainter.State.Error -> isError = true },
+                onState = { state ->
+                    if (state is AsyncImagePainter.State.Error) {
+                        if (activeUrl == primary && fallback != null) {
+                            activeUrl = fallback
+                            isError = false
+                        } else {
+                            isError = true
+                        }
+                    } else {
+                        isError = false
+                    }
+                },
             )
         }
 
-        if (posterUrl != null && isError) {
+        if (activeUrl != null && isError) {
             Icon(
                 imageVector = Icons.Outlined.BrokenImage,
                 contentDescription = null,
