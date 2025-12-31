@@ -94,6 +94,8 @@ class DetailViewModelTest {
                         metaSecondary = "★ 8.1 • 120m",
                         overview = "No overview available.", // fallback
                         isFavorite = true,
+                        posterUrl = null,
+                        posterFallbackUrl = null,
                     ),
                     state,
                 )
