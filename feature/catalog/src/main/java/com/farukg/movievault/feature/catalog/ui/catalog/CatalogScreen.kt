@@ -3,7 +3,6 @@ package com.farukg.movievault.feature.catalog.ui.catalog
 import android.text.format.DateUtils
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,8 +28,6 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.SyncProblem
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -45,6 +42,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -76,6 +74,7 @@ import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.EmptyState
 import com.farukg.movievault.core.ui.ErrorState
+import com.farukg.movievault.core.ui.components.MovieVaultCard
 import com.farukg.movievault.feature.catalog.ui.components.MoviePoster
 import com.farukg.movievault.feature.catalog.ui.components.catalogPosterHeightDp
 import kotlin.math.max
@@ -527,17 +526,18 @@ private fun StatusIconButton(
     modifier: Modifier = Modifier,
 ) {
     val presentation = statusUi.toPresentation()
-    val cd = presentation.contentDescription
 
     Surface(
-        modifier = modifier.clip(RoundedCornerShape(12.dp)),
+        onClick = onClick,
+        modifier =
+            modifier
+                .semantics { contentDescription = presentation.contentDescription }
+                .minimumInteractiveComponentSize(),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
-        IconButton(
-            onClick = onClick,
-            modifier = Modifier.size(34.dp).semantics { contentDescription = cd },
-        ) {
+        Box(modifier = Modifier.size(34.dp), contentAlignment = Alignment.Center) {
             when (statusUi.icon) {
                 CatalogStatusIcon.BackgroundRefreshing -> {
                     CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
@@ -644,14 +644,7 @@ private fun MovieRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-            ),
-        shape = RoundedCornerShape(14.dp),
-    ) {
+    MovieVaultCard(onClick = onClick, modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -683,14 +676,7 @@ private fun MovieRow(
 
 @Composable
 private fun MovieRowPlaceholder(modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-            ),
-        shape = RoundedCornerShape(14.dp),
-    ) {
+    MovieVaultCard(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
