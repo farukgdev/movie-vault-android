@@ -38,11 +38,5 @@ class FavoritesViewModel @Inject constructor(repository: FavoritesRepository) : 
     }
 }
 
-private fun Movie.toRowUi(): FavoriteRowUi {
-    val parts = buildList {
-        releaseYear?.let { add(it.toString()) }
-        rating?.let { add("★ ${"%.1f".format(it)}") }
-    }
-    val subtitle = parts.joinToString(" • ")
-    return FavoriteRowUi(id = id, title = title, subtitle = subtitle)
-}
+private fun Movie.toRowUi(): FavoriteRowUi =
+    FavoriteRowUi(id = id, title = title, releaseYear = releaseYear, rating = rating)

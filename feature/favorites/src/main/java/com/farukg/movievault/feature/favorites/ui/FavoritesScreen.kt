@@ -2,6 +2,8 @@ package com.farukg.movievault.feature.favorites.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,12 +22,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.EmptyState
 import com.farukg.movievault.core.ui.ErrorState
 import com.farukg.movievault.core.ui.LoadingState
+import com.farukg.movievault.core.ui.components.MetaPill
 import com.farukg.movievault.core.ui.components.MovieVaultCard
+import com.farukg.movievault.core.ui.components.RatingPill
 
 @Composable
 fun FavoritesScreen(
@@ -73,8 +78,12 @@ fun FavoritesScreen(
                     title = "No favorites yet",
                     message = "Tap the heart on a movie to save it here.",
                 )
+
             is FavoritesUiState.Content -> {
-                LazyColumn(modifier = bodyModifier) {
+                LazyColumn(
+                    modifier = bodyModifier,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     items(uiState.movies, key = { it.id }) { movie ->
                         MovieVaultCard(
                             onClick = { onOpenDetail(movie.id) },
@@ -88,16 +97,23 @@ fun FavoritesScreen(
                                     Text(
                                         text = movie.title,
                                         style = MaterialTheme.typography.titleMedium,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
-                                    if (movie.subtitle.isNotBlank()) {
-                                        Spacer(Modifier.height(2.dp))
-                                        Text(
-                                            text = movie.subtitle,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
+
+                                    Spacer(Modifier.height(10.dp))
+
+                                    @OptIn(ExperimentalLayoutApi::class)
+                                    FlowRow(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        movie.releaseYear?.let { MetaPill(text = it.toString()) }
+                                        movie.rating?.let { RatingPill(rating = it) }
                                     }
                                 }
+
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                                     contentDescription = null,

@@ -60,28 +60,15 @@ constructor(
     }
 }
 
-private fun MovieDetail.toUiState(): DetailUiState.Content {
-    val metaPrimary =
-        buildList {
-                if (genres.isNotEmpty()) add(genres.take(2).joinToString(", "))
-                releaseYear?.let { add(it.toString()) }
-            }
-            .joinToString(" • ")
-
-    val metaSecondary =
-        buildList {
-                rating?.let { add("★ ${"%.1f".format(it)}") }
-                runtimeMinutes?.let { add("${it}m") }
-            }
-            .joinToString(" • ")
-
-    return DetailUiState.Content(
+private fun MovieDetail.toUiState(): DetailUiState.Content =
+    DetailUiState.Content(
         title = title,
-        metaPrimary = metaPrimary,
-        metaSecondary = metaSecondary,
+        genres = genres.take(4),
+        releaseYear = releaseYear,
+        rating = rating,
+        runtimeMinutes = runtimeMinutes,
         overview = overview.ifBlank { "No overview available." },
         posterUrl = posterUrl,
         isFavorite = isFavorite,
         posterFallbackUrl = posterUrl.tmdbWithSizeOrNull(TmdbImageSize.List),
     )
-}
