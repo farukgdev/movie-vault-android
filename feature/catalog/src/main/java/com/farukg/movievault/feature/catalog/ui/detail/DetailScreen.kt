@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Favorite
@@ -41,8 +43,6 @@ fun DetailScreen(
         modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val bodyModifier = Modifier.weight(1f).fillMaxWidth()
-
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
                 Icon(
@@ -67,6 +67,8 @@ fun DetailScreen(
             }
         }
 
+        val bodyModifier = Modifier.weight(1f).fillMaxWidth()
+
         when (uiState) {
             DetailUiState.Loading ->
                 LoadingState(modifier = bodyModifier, message = "Loading details...")
@@ -79,7 +81,12 @@ fun DetailScreen(
                 )
 
             is DetailUiState.Content -> {
-                Column(modifier = bodyModifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                val scrollState = rememberScrollState()
+
+                Column(
+                    modifier = bodyModifier.verticalScroll(scrollState),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     MovieVaultCard(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -100,8 +107,9 @@ fun DetailScreen(
                                     text = uiState.title,
                                     style = MaterialTheme.typography.titleLarge,
                                 )
-                                Spacer(modifier = Modifier.height(6.dp))
+
                                 if (uiState.metaPrimary.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     Text(
                                         text = uiState.metaPrimary,
                                         style = MaterialTheme.typography.bodyMedium,
@@ -129,6 +137,8 @@ fun DetailScreen(
                             modifier = Modifier.padding(16.dp),
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
             }
         }
