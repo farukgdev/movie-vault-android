@@ -46,8 +46,9 @@ fun MoviePoster(
                 contentScale = ContentScale.Crop,
                 onState = { state ->
                     if (state is AsyncImagePainter.State.Error) {
-                        if (activeUrl == primary && fallback != null) {
-                            activeUrl = fallback
+                        val next = nextPosterUrlOnError(activeUrl, primary, fallback)
+                        if (next != activeUrl) {
+                            activeUrl = next
                             isError = false
                         } else {
                             isError = true
@@ -68,4 +69,12 @@ fun MoviePoster(
             )
         }
     }
+}
+
+internal fun nextPosterUrlOnError(
+    activeUrl: String?,
+    primaryUrl: String?,
+    fallbackUrl: String?,
+): String? {
+    return if (activeUrl == primaryUrl && !fallbackUrl.isNullOrBlank()) fallbackUrl else activeUrl
 }
