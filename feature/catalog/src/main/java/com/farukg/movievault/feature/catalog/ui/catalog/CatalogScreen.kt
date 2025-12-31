@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -74,7 +76,9 @@ import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.EmptyState
 import com.farukg.movievault.core.ui.ErrorState
+import com.farukg.movievault.core.ui.components.MetaPill
 import com.farukg.movievault.core.ui.components.MovieVaultCard
+import com.farukg.movievault.core.ui.components.RatingPill
 import com.farukg.movievault.feature.catalog.ui.components.MoviePoster
 import com.farukg.movievault.feature.catalog.ui.components.catalogPosterHeightDp
 import kotlin.math.max
@@ -306,7 +310,8 @@ private fun CatalogList(
             } else {
                 MovieRow(
                     title = row.title,
-                    subtitle = row.subtitle,
+                    releaseYear = row.releaseYear,
+                    rating = row.rating,
                     posterUrl = row.posterUrl,
                     onClick = { onOpenDetail(row.id) },
                 )
@@ -639,7 +644,8 @@ private fun StatusSheetContent(
 @Composable
 private fun MovieRow(
     title: String,
-    subtitle: String,
+    releaseYear: Int?,
+    rating: Double?,
     posterUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -660,14 +666,25 @@ private fun MovieRow(
             Spacer(modifier = Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, style = MaterialTheme.typography.titleMedium)
-                if (subtitle.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+
+                if (releaseYear != null || rating != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        releaseYear?.let { MetaPill(text = it.toString()) }
+                        rating?.let { RatingPill(rating = it) }
+                    }
                 }
             }
         }
@@ -697,9 +714,9 @@ private fun MovieRowPlaceholder(modifier: Modifier = Modifier) {
                         .clip(RoundedCornerShape(6.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 Spacer(
-                    Modifier.fillMaxWidth(0.4f)
+                    Modifier.fillMaxWidth(0.45f)
                         .height(14.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)

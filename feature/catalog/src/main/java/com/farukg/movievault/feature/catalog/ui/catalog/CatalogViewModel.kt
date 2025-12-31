@@ -298,15 +298,11 @@ data class CatalogStatusUi(
     val isRefreshing: Boolean,
 )
 
-private fun Movie.toRowUi(): MovieRowUi {
-    val parts = buildList {
-        releaseYear?.let { add(it.toString()) }
-        rating?.let { add("★ ${"%.1f".format(it)}") }
-    }
-    return MovieRowUi(
+private fun Movie.toRowUi(): MovieRowUi =
+    MovieRowUi(
         id = id,
         title = title,
-        subtitle = parts.joinToString(" • "),
+        releaseYear = releaseYear,
+        rating = rating,
         posterUrl = posterUrl,
     )
-}

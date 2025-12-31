@@ -9,8 +9,10 @@ sealed interface DetailUiState {
 
     data class Content(
         val title: String,
-        val metaPrimary: String,
-        val metaSecondary: String,
+        val genres: List<String>,
+        val releaseYear: Int?,
+        val rating: Double?,
+        val runtimeMinutes: Int?,
         val overview: String,
         val posterUrl: String?,
         val posterFallbackUrl: String?,
