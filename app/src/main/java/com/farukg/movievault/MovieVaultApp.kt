@@ -16,10 +16,10 @@ class MovieVaultApp : Application(), SingletonImageLoader.Factory {
     override fun newImageLoader(context: Context): ImageLoader {
         return ImageLoader.Builder(context)
             .crossfade(180)
-            .memoryCache { MemoryCache.Builder().maxSizePercent(this, 0.25).build() }
+            .memoryCache { MemoryCache.Builder().maxSizePercent(context, 0.25).build() }
             .diskCache {
                 DiskCache.Builder()
-                    .directory(cacheDir.resolve("poster_cache"))
+                    .directory(context.noBackupFilesDir.resolve("poster_cache"))
                     .maxSizePercent(0.02)
                     .build()
             }

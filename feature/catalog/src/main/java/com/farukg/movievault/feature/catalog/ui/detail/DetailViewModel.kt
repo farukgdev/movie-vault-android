@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.farukg.movievault.core.result.AppResult
 import com.farukg.movievault.data.model.MovieDetail
+import com.farukg.movievault.data.remote.tmdb.TmdbImageSize
+import com.farukg.movievault.data.remote.tmdb.tmdbWithSizeOrNull
 import com.farukg.movievault.data.repository.CatalogRepository
 import com.farukg.movievault.data.repository.FavoritesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -80,5 +82,6 @@ private fun MovieDetail.toUiState(): DetailUiState.Content {
         overview = overview.ifBlank { "No overview available." },
         posterUrl = posterUrl,
         isFavorite = isFavorite,
+        posterFallbackUrl = posterUrl.tmdbWithSizeOrNull(TmdbImageSize.List),
     )
 }

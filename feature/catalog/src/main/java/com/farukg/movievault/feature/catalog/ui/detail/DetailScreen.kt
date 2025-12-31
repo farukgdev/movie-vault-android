@@ -95,6 +95,7 @@ fun DetailScreen(
                             val posterHeight = detailPosterHeightDp()
                             MoviePoster(
                                 posterUrl = uiState.posterUrl,
+                                fallbackPosterUrl = uiState.posterFallbackUrl,
                                 contentDescription = "${uiState.title} poster",
                                 modifier = Modifier.height(posterHeight).aspectRatio(2f / 3f),
                             )

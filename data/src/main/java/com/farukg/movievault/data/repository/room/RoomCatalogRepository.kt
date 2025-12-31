@@ -22,6 +22,8 @@ import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.model.MovieDetail
 import com.farukg.movievault.data.paging.CatalogRemoteMediator
 import com.farukg.movievault.data.remote.CatalogRemoteDataSource
+import com.farukg.movievault.data.remote.tmdb.TmdbImageSize
+import com.farukg.movievault.data.remote.tmdb.tmdbWithSizeOrNull
 import com.farukg.movievault.data.repository.CatalogRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -77,7 +79,7 @@ constructor(
                         id = row.id,
                         title = row.title,
                         releaseYear = row.releaseYear,
-                        posterUrl = row.posterUrl,
+                        posterUrl = row.posterUrl.tmdbWithSizeOrNull(TmdbImageSize.List),
                         rating = row.rating,
                         isFavorite = row.isFavorite,
                     )
