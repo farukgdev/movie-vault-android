@@ -10,6 +10,8 @@ import coil3.memory.MemoryCache
 import coil3.request.crossfade
 import dagger.hilt.android.HiltAndroidApp
 
+private const val POSTER_DISK_CACHE_BYTES: Long = 100L * 1024L * 1024L // 100 MB
+
 @HiltAndroidApp
 class MovieVaultApp : Application(), SingletonImageLoader.Factory {
 
@@ -20,7 +22,7 @@ class MovieVaultApp : Application(), SingletonImageLoader.Factory {
             .diskCache {
                 DiskCache.Builder()
                     .directory(context.noBackupFilesDir.resolve("poster_cache"))
-                    .maxSizePercent(0.02)
+                    .maxSizeBytes(POSTER_DISK_CACHE_BYTES)
                     .build()
             }
             .build()
