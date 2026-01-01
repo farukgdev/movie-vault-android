@@ -90,12 +90,15 @@ class DetailViewModelTest {
                 assertEquals(
                     DetailUiState.Content(
                         title = "Movie A",
-                        metaPrimary = "Action, Drama • 2024", // first 2 genres + year
-                        metaSecondary = "★ 8.1 • 120m",
+                        genres =
+                            listOf("Action", "Drama", "Comedy"), // take(4) in VM, so all 3 survive
+                        releaseYear = 2024,
+                        rating = 8.1,
+                        runtimeMinutes = 120,
                         overview = "No overview available.", // fallback
-                        isFavorite = true,
                         posterUrl = null,
                         posterFallbackUrl = null,
+                        isFavorite = true,
                     ),
                     state,
                 )
@@ -171,6 +174,7 @@ class DetailViewModelTest {
         rating: Double? = null,
         runtimeMinutes: Int? = null,
         overview: String = "Overview",
+        posterUrl: String? = null,
         isFavorite: Boolean = false,
     ): MovieDetail =
         MovieDetail(
@@ -181,6 +185,7 @@ class DetailViewModelTest {
             releaseYear = releaseYear,
             rating = rating,
             runtimeMinutes = runtimeMinutes,
+            posterUrl = posterUrl,
             isFavorite = isFavorite,
         )
 
