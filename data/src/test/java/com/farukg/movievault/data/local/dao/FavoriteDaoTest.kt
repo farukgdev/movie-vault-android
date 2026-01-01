@@ -40,7 +40,7 @@ class FavoriteDaoTest {
     }
 
     @Test
-    fun observeFavoriteMovies_returns_joined_movies_sorted_by_createdAt_desc() = runTest {
+    fun observeFavoriteRows_returns_joined_movies_sorted_by_createdAt_desc() = runTest {
         movieDao.upsertAll(
             listOf(
                 movieEntity(id = 1, title = "A", popularRank = 0),
@@ -51,7 +51,7 @@ class FavoriteDaoTest {
         favoriteDao.insert(FavoriteEntity(movieId = 1, createdAtEpochMillis = 100))
         favoriteDao.insert(FavoriteEntity(movieId = 2, createdAtEpochMillis = 200))
 
-        favoriteDao.observeFavoriteMovies().test {
+        favoriteDao.observeFavoriteRows().test {
             val first = awaitItem()
             assertEquals(listOf(2L, 1L), first.map { it.id })
             cancelAndIgnoreRemainingEvents()

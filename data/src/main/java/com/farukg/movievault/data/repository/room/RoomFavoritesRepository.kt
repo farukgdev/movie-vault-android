@@ -6,13 +6,14 @@ import com.farukg.movievault.core.result.AppResult
 import com.farukg.movievault.data.local.dao.FavoriteDao
 import com.farukg.movievault.data.local.db.MovieVaultDatabase
 import com.farukg.movievault.data.local.entity.FavoriteEntity
-import com.farukg.movievault.data.local.mapper.toDomainMovie
 import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.repository.FavoritesRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
 @Singleton
@@ -22,9 +23,23 @@ constructor(private val db: MovieVaultDatabase, private val favoriteDao: Favorit
     FavoritesRepository {
 
     override fun favorites(): Flow<AppResult<List<Movie>>> =
-        favoriteDao.observeFavoriteMovies().map { entities ->
-            AppResult.Success(entities.map { it.toDomainMovie(isFavorite = true) })
-        }
+        favoriteDao
+            .observeFavoriteRows()
+            .map { rows ->
+                val movies =
+                    rows.map { row ->
+                        Movie(
+                            id = row.id,
+                            title = row.title,
+                            releaseYear = row.releaseYear,
+                            posterUrl = row.posterUrl,
+                            rating = row.rating,
+                            isFavorite = true,
+                        )
+                    }
+                AppResult.Success(movies)
+            }
+            .flowOn(Dispatchers.Default)
 
     override suspend fun toggleFavorite(movieId: Long): AppResult<Boolean> =
         try {
