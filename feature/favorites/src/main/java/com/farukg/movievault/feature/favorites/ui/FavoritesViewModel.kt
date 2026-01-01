@@ -7,6 +7,7 @@ import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.repository.FavoritesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -16,6 +17,9 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class FavoritesViewModel @Inject constructor(private val repository: FavoritesRepository) :
     ViewModel() {
+    private val ioScope =
+        kotlinx.coroutines.CoroutineScope(viewModelScope.coroutineContext + Dispatchers.IO)
+
     val uiState: StateFlow<FavoritesUiState> =
         repository
             .favorites()
@@ -29,11 +33,7 @@ class FavoritesViewModel @Inject constructor(private val repository: FavoritesRe
                     }
                 }
             }
-            .stateIn(
-                viewModelScope,
-                SharingStarted.WhileSubscribed(5_000),
-                FavoritesUiState.Loading,
-            )
+            .stateIn(ioScope, SharingStarted.WhileSubscribed(5_000), FavoritesUiState.Loading)
 
     fun retry() {
         // For now no-op

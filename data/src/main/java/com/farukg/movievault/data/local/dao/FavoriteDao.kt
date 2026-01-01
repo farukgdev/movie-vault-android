@@ -5,7 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.farukg.movievault.data.local.entity.FavoriteEntity
-import com.farukg.movievault.data.local.entity.MovieEntity
+import com.farukg.movievault.data.local.model.FavoriteMovieRow
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -15,12 +15,19 @@ interface FavoriteDao {
 
     @Query(
         """
-        SELECT m.* FROM movies m
-        INNER JOIN favorites f ON m.id = f.movieId
+        SELECT 
+            m.id,
+            m.title,
+            m.releaseYear,
+            m.posterUrl,
+            m.rating,
+            f.createdAtEpochMillis AS createdAtEpochMillis
+        FROM favorites f
+        INNER JOIN movies m ON m.id = f.movieId
         ORDER BY f.createdAtEpochMillis DESC
         """
     )
-    fun observeFavoriteMovies(): Flow<List<MovieEntity>>
+    fun observeFavoriteRows(): Flow<List<FavoriteMovieRow>>
 
     @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE movieId = :movieId)")
     suspend fun isFavorited(movieId: Long): Boolean
