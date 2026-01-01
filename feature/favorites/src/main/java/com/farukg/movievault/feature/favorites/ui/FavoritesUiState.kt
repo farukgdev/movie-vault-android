@@ -17,4 +17,5 @@ data class FavoriteRowUi(
     val title: String,
     val releaseYear: Int?,
     val rating: Double?,
+    val posterUrl: String?,
 )

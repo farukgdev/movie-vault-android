@@ -20,6 +20,7 @@ fun FavoritesRouteScreen(
         onRetry = viewModel::retry,
         onBack = onBack,
         onOpenDetail = onOpenDetail,
+        onToggleFavorite = viewModel::toggleFavorite,
         modifier = modifier,
     )
 }
