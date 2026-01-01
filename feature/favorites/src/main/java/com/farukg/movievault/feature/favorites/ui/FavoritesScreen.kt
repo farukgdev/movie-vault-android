@@ -1,6 +1,8 @@
 package com.farukg.movievault.feature.favorites.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -12,9 +14,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Favorite
@@ -24,14 +28,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.EmptyState
 import com.farukg.movievault.core.ui.ErrorState
-import com.farukg.movievault.core.ui.LoadingState
 import com.farukg.movievault.core.ui.components.MetaPill
 import com.farukg.movievault.core.ui.components.MoviePoster
 import com.farukg.movievault.core.ui.components.MovieVaultCard
@@ -48,6 +54,7 @@ fun FavoritesScreen(
 ) {
     val savedCount =
         when (uiState) {
+            is FavoritesUiState.Loading -> null
             is FavoritesUiState.Content -> uiState.movies.size
             else -> 0
         }
@@ -61,8 +68,7 @@ fun FavoritesScreen(
         val bodyModifier = Modifier.weight(1f).fillMaxWidth()
 
         when (uiState) {
-            FavoritesUiState.Loading ->
-                LoadingState(modifier = bodyModifier, message = "Loading favorites...")
+            FavoritesUiState.Loading -> FavoritesSkeletonList(modifier = bodyModifier)
 
             is FavoritesUiState.Error ->
                 ErrorState(
@@ -99,7 +105,7 @@ fun FavoritesScreen(
 }
 
 @Composable
-private fun FavoritesTopBar(onBack: () -> Unit, savedCount: Int, modifier: Modifier = Modifier) {
+private fun FavoritesTopBar(onBack: () -> Unit, savedCount: Int?, modifier: Modifier = Modifier) {
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) {
             Icon(imageVector = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
@@ -110,12 +116,13 @@ private fun FavoritesTopBar(onBack: () -> Unit, savedCount: Int, modifier: Modif
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.weight(1f),
         )
-
-        Text(
-            text = "$savedCount saved",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        savedCount?.let {
+            Text(
+                text = "$it saved",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -171,6 +178,67 @@ private fun FavoriteRow(
                     imageVector = Icons.Outlined.Favorite,
                     contentDescription = "Remove from favorites",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FavoritesSkeletonList(modifier: Modifier = Modifier, count: Int = 10) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 0.dp, top = 6.dp, end = 0.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        items(count, key = { "fav_skeleton_$it" }) { FavoriteRowPlaceholder() }
+    }
+}
+
+@Composable
+private fun FavoriteRowPlaceholder(modifier: Modifier = Modifier) {
+    MovieVaultCard(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val posterHeight = 64.dp
+
+            Spacer(
+                modifier =
+                    Modifier.height(posterHeight)
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Spacer(
+                    Modifier.fillMaxWidth(0.6f)
+                        .height(18.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+                Spacer(Modifier.height(10.dp))
+                Spacer(
+                    Modifier.fillMaxWidth(0.4f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+            }
+
+            Box(
+                modifier = Modifier.minimumInteractiveComponentSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Spacer(
+                    modifier =
+                        Modifier.size(24.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
                 )
             }
         }
