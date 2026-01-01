@@ -59,8 +59,22 @@ class FavoritesViewModelTest {
                     initial =
                         AppResult.Success(
                             listOf(
-                                Movie(id = 1, title = "A", releaseYear = 2024, rating = null),
-                                Movie(id = 2, title = "B", releaseYear = null, rating = null),
+                                Movie(
+                                    id = 1,
+                                    title = "A",
+                                    releaseYear = 2024,
+                                    rating = null,
+                                    posterUrl = null,
+                                    isFavorite = true,
+                                ),
+                                Movie(
+                                    id = 2,
+                                    title = "B",
+                                    releaseYear = null,
+                                    rating = null,
+                                    posterUrl = null,
+                                    isFavorite = true,
+                                ),
                             )
                         )
                 )
@@ -72,8 +86,20 @@ class FavoritesViewModelTest {
                     FavoritesUiState.Content(
                         movies =
                             listOf(
-                                FavoriteRowUi(id = 1, title = "A", subtitle = "2024"),
-                                FavoriteRowUi(id = 2, title = "B", subtitle = ""),
+                                FavoriteRowUi(
+                                    id = 1,
+                                    title = "A",
+                                    releaseYear = 2024,
+                                    rating = null,
+                                    posterUrl = null,
+                                ),
+                                FavoriteRowUi(
+                                    id = 2,
+                                    title = "B",
+                                    releaseYear = null,
+                                    rating = null,
+                                    posterUrl = null,
+                                ),
                             )
                     ),
                     state,
@@ -117,7 +143,16 @@ class FavoritesViewModelTest {
 
                 assertEquals(
                     FavoritesUiState.Content(
-                        movies = listOf(FavoriteRowUi(id = 3, title = "C", subtitle = "2022"))
+                        movies =
+                            listOf(
+                                FavoriteRowUi(
+                                    id = 3,
+                                    title = "C",
+                                    releaseYear = 2022,
+                                    rating = null,
+                                    posterUrl = null,
+                                )
+                            )
                     ),
                     awaitItem(),
                 )
