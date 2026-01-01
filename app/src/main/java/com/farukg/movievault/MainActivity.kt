@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.farukg.movievault.feature.favorites.ui.FavoritesViewModel
 import com.farukg.movievault.navigation.AppNavHost
 import com.farukg.movievault.ui.theme.MovieVaultTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -21,11 +23,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MovieVaultTheme {
+                val favoritesVm: FavoritesViewModel = hiltViewModel()
+
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     contentWindowInsets = WindowInsets.safeDrawing,
                 ) { innerPadding ->
-                    AppNavHost(modifier = Modifier.padding(innerPadding))
+                    AppNavHost(
+                        modifier = Modifier.padding(innerPadding),
+                        favoritesViewModel = favoritesVm,
+                    )
                 }
             }
         }
