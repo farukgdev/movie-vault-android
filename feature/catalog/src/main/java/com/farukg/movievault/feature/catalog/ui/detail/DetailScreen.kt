@@ -32,10 +32,10 @@ import com.farukg.movievault.core.error.userMessage
 import com.farukg.movievault.core.ui.ErrorState
 import com.farukg.movievault.core.ui.LoadingState
 import com.farukg.movievault.core.ui.components.MetaPill
+import com.farukg.movievault.core.ui.components.MoviePoster
 import com.farukg.movievault.core.ui.components.MovieVaultCard
 import com.farukg.movievault.core.ui.components.RatingPill
 import com.farukg.movievault.core.ui.components.TagPill
-import com.farukg.movievault.feature.catalog.ui.components.MoviePoster
 import com.farukg.movievault.feature.catalog.ui.components.detailPosterHeightDp
 
 @Composable
