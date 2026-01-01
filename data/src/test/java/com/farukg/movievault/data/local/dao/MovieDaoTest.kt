@@ -42,37 +42,44 @@ class MovieDaoTest {
     }
 
     @Test
-    fun catalogPagingSource_filters_rank_orders_by_popularRank_and_computes_isFavorite() = runTest {
-        movieDao.upsertAll(
-            listOf(
-                movieEntity(id = 1, title = "A", popularRank = 2),
-                movieEntity(id = 2, title = "B", popularRank = 0),
-                movieEntity(id = 3, title = "C", popularRank = 1),
-                movieEntity(id = 99, title = "DetailOnly", popularRank = -1),
-            )
-        )
-
-        favoriteDao.insert(FavoriteEntity(movieId = 3L, createdAtEpochMillis = 100L))
-
-        val pagingSource = movieDao.catalogPagingSource()
-
-        val loadResult =
-            pagingSource.load(
-                PagingSource.LoadParams.Refresh(
-                    key = null,
-                    loadSize = 50,
-                    placeholdersEnabled = false,
+    fun catalogPagingSource_filters_rank_orders_by_popularRank_and_is_not_affected_by_favorites_changes() =
+        runTest {
+            movieDao.upsertAll(
+                listOf(
+                    movieEntity(id = 1, title = "A", popularRank = 2),
+                    movieEntity(id = 2, title = "B", popularRank = 0),
+                    movieEntity(id = 3, title = "C", popularRank = 1),
+                    movieEntity(id = 99, title = "DetailOnly", popularRank = -1),
                 )
             )
 
-        assertTrue(loadResult is PagingSource.LoadResult.Page)
-        val page = loadResult as PagingSource.LoadResult.Page<Int, CatalogMovieRow>
+            suspend fun loadIds(): List<Long> {
+                val pagingSource = movieDao.catalogPagingSource()
+                val loadResult =
+                    pagingSource.load(
+                        PagingSource.LoadParams.Refresh(
+                            key = null,
+                            loadSize = 50,
+                            placeholdersEnabled = false,
+                        )
+                    )
+                assertTrue(loadResult is PagingSource.LoadResult.Page)
+                val page = loadResult as PagingSource.LoadResult.Page<Int, CatalogMovieRow>
+                return page.data.map { it.id }
+            }
 
-        // filtered + ordered
-        assertEquals(listOf(2L, 3L, 1L), page.data.map { it.id })
-        assertTrue(page.data.first { it.id == 3L }.isFavorite)
-        assertTrue(page.data.first { it.id == 2L }.isFavorite.not())
-    }
+            val before = loadIds()
+            assertEquals(listOf(2L, 3L, 1L), before)
+
+            // changing favorites should not affect catalog paging results
+            favoriteDao.insert(FavoriteEntity(movieId = 3L, createdAtEpochMillis = 100L))
+            val afterInsert = loadIds()
+            assertEquals(before, afterInsert)
+
+            favoriteDao.delete(3L)
+            val afterDelete = loadIds()
+            assertEquals(before, afterDelete)
+        }
 
     @Test
     fun countCatalogMovies_counts_only_catalog_rows() = runTest {

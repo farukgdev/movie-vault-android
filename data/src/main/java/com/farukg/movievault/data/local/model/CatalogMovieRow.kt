@@ -7,5 +7,4 @@ data class CatalogMovieRow(
     val posterUrl: String?,
     val rating: Double?,
     val popularRank: Int,
-    val isFavorite: Boolean,
 )
