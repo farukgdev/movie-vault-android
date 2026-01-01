@@ -11,9 +11,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 @HiltViewModel
-class FavoritesViewModel @Inject constructor(repository: FavoritesRepository) : ViewModel() {
+class FavoritesViewModel @Inject constructor(private val repository: FavoritesRepository) :
+    ViewModel() {
     val uiState: StateFlow<FavoritesUiState> =
         repository
             .favorites()
@@ -36,7 +38,17 @@ class FavoritesViewModel @Inject constructor(repository: FavoritesRepository) : 
     fun retry() {
         // For now no-op
     }
+
+    fun toggleFavorite(id: Long) {
+        viewModelScope.launch { repository.toggleFavorite(id) }
+    }
 }
 
 private fun Movie.toRowUi(): FavoriteRowUi =
-    FavoriteRowUi(id = id, title = title, releaseYear = releaseYear, rating = rating)
+    FavoriteRowUi(
+        id = id,
+        title = title,
+        releaseYear = releaseYear,
+        rating = rating,
+        posterUrl = posterUrl,
+    )
