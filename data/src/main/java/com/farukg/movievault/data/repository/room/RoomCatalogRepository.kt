@@ -81,7 +81,6 @@ constructor(
                         releaseYear = row.releaseYear,
                         posterUrl = row.posterUrl.tmdbWithSizeOrNull(TmdbImageSize.List),
                         rating = row.rating,
-                        isFavorite = row.isFavorite,
                     )
                 }
             }

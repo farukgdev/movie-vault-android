@@ -19,8 +19,7 @@ interface MovieDao {
             m.releaseYear,
             m.posterUrl,
             m.rating,
-            m.popularRank,
-            EXISTS(SELECT 1 FROM favorites f WHERE f.movieId = m.id) AS isFavorite
+            m.popularRank
         FROM movies m
         WHERE m.popularRank >= 0
         ORDER BY m.popularRank ASC, m.id ASC
