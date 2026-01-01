@@ -30,6 +30,7 @@ import com.farukg.movievault.feature.catalog.ui.catalog.CatalogRouteScreen
 import com.farukg.movievault.feature.catalog.ui.detail.DetailRouteScreen
 import com.farukg.movievault.feature.favorites.navigation.FavoritesRoute
 import com.farukg.movievault.feature.favorites.ui.FavoritesRouteScreen
+import com.farukg.movievault.feature.favorites.ui.FavoritesViewModel
 
 fun Context.findActivity(): Activity? =
     when (this) {
@@ -53,7 +54,7 @@ private fun ReportResumed(key: NavKey, navigator: MovieVaultNavigator) {
 }
 
 @Composable
-fun AppNavHost(modifier: Modifier = Modifier) {
+fun AppNavHost(modifier: Modifier = Modifier, favoritesViewModel: FavoritesViewModel) {
     val activity = LocalContext.current.findActivity()
 
     val backStack = rememberNavBackStack(CatalogRoute)
@@ -122,6 +123,7 @@ fun AppNavHost(modifier: Modifier = Modifier) {
                 entry<FavoritesRoute> {
                     ReportResumed(FavoritesRoute, navigator)
                     FavoritesRouteScreen(
+                        viewModel = favoritesViewModel,
                         onBack = { navigator.onBackPressed() },
                         onOpenDetail = { id -> navigator.openDetail(id) },
                         modifier = screenModifier,
