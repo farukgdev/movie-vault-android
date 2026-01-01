@@ -1,4 +1,4 @@
-package com.farukg.movievault.feature.catalog.ui.components
+package com.farukg.movievault.core.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box

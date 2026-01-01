@@ -1,6 +1,6 @@
-package com.farukg.movievault.feature.catalog.ui.components
+package com.farukg.movievault.core.ui.components
 
-import org.junit.Assert.assertEquals
+import org.junit.Assert
 import org.junit.Test
 
 class PosterFallbackTest {
@@ -11,14 +11,14 @@ class PosterFallbackTest {
         val fallback = "https://image.tmdb.org/t/p/w500/a.jpg"
 
         val next = nextPosterUrlOnError(primary, primary, fallback)
-        assertEquals(fallback, next)
+        Assert.assertEquals(fallback, next)
     }
 
     @Test
     fun `does not switch when fallback is null`() {
         val primary = "p"
         val next = nextPosterUrlOnError(primary, primary, null)
-        assertEquals(primary, next)
+        Assert.assertEquals(primary, next)
     }
 
     @Test
@@ -26,6 +26,6 @@ class PosterFallbackTest {
         val primary = "p"
         val fallback = "f"
         val next = nextPosterUrlOnError(fallback, primary, fallback)
-        assertEquals(fallback, next)
+        Assert.assertEquals(fallback, next)
     }
 }
