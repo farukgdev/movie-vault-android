@@ -12,16 +12,13 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.farukg.movievault.feature.catalog.navigation.CatalogRoute
@@ -54,12 +51,13 @@ private fun ReportResumed(key: NavKey, navigator: MovieVaultNavigator) {
 }
 
 @Composable
-fun AppNavHost(modifier: Modifier = Modifier, favoritesViewModel: FavoritesViewModel) {
-    val activity = LocalContext.current.findActivity()
-
-    val backStack = rememberNavBackStack(CatalogRoute)
-    val navigator = remember(backStack) { MovieVaultNavigator(backStack) }
-
+fun AppNavHost(
+    modifier: Modifier = Modifier,
+    favoritesViewModel: FavoritesViewModel,
+    backStack: MutableList<NavKey>,
+    navigator: MovieVaultNavigator,
+    onFinish: () -> Unit,
+) {
     val screenModifier = Modifier.fillMaxSize()
 
     NavDisplay(
@@ -69,7 +67,7 @@ fun AppNavHost(modifier: Modifier = Modifier, favoritesViewModel: FavoritesViewM
             when (navigator.onBackPressed()) {
                 MovieVaultNavigator.BackResult.Popped -> Unit
                 MovieVaultNavigator.BackResult.Busy -> Unit
-                MovieVaultNavigator.BackResult.AtRoot -> activity?.finish()
+                MovieVaultNavigator.BackResult.AtRoot -> onFinish()
             }
         },
         entryDecorators =
@@ -105,7 +103,7 @@ fun AppNavHost(modifier: Modifier = Modifier, favoritesViewModel: FavoritesViewM
                 entry<CatalogRoute> {
                     ReportResumed(CatalogRoute, navigator)
                     CatalogRouteScreen(
-                        onOpenDetail = { id -> navigator.openDetail(id) },
+                        onOpenDetail = { id, title -> navigator.openDetail(id, title) },
                         onOpenFavorites = { navigator.openFavorites() },
                         modifier = screenModifier,
                     )
@@ -114,7 +112,7 @@ fun AppNavHost(modifier: Modifier = Modifier, favoritesViewModel: FavoritesViewM
                 entry<DetailRoute> { key ->
                     ReportResumed(key, navigator)
                     DetailRouteScreen(
-                        movieId = key.movieId,
+                        route = key,
                         onBack = { navigator.onBackPressed() },
                         modifier = screenModifier,
                     )
@@ -125,7 +123,7 @@ fun AppNavHost(modifier: Modifier = Modifier, favoritesViewModel: FavoritesViewM
                     FavoritesRouteScreen(
                         viewModel = favoritesViewModel,
                         onBack = { navigator.onBackPressed() },
-                        onOpenDetail = { id -> navigator.openDetail(id) },
+                        onOpenDetail = { id, title -> navigator.openDetail(id, title) },
                         modifier = screenModifier,
                     )
                 }

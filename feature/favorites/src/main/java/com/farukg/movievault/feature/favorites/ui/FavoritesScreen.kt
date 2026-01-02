@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,8 +27,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,24 +44,14 @@ import com.farukg.movievault.core.ui.components.RatingPill
 fun FavoritesScreen(
     uiState: FavoritesUiState,
     onRetry: () -> Unit,
-    onBack: () -> Unit,
-    onOpenDetail: (Long) -> Unit,
+    onOpenDetail: (movieId: Long, title: String) -> Unit,
     onToggleFavorite: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val savedCount =
-        when (uiState) {
-            is FavoritesUiState.Loading -> null
-            is FavoritesUiState.Content -> uiState.movies.size
-            else -> 0
-        }
-
     Column(
-        modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        FavoritesTopBar(onBack = onBack, savedCount = savedCount)
-
         val bodyModifier = Modifier.weight(1f).fillMaxWidth()
 
         when (uiState) {
@@ -94,34 +81,12 @@ fun FavoritesScreen(
                     items(uiState.movies, key = { it.id }) { movie ->
                         FavoriteRow(
                             movie = movie,
-                            onOpenDetail = { onOpenDetail(movie.id) },
+                            onOpenDetail = { onOpenDetail(movie.id, movie.title) },
                             onUnfavorite = { onToggleFavorite(movie.id) },
                         )
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun FavoritesTopBar(onBack: () -> Unit, savedCount: Int?, modifier: Modifier = Modifier) {
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) {
-            Icon(imageVector = Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back")
-        }
-
-        Text(
-            text = "Favorites",
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.weight(1f),
-        )
-        savedCount?.let {
-            Text(
-                text = "$it saved",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
