@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.farukg.movievault.core.ui.components.MetaPill
 
@@ -25,7 +26,7 @@ fun FavoritesTopAppBar(onBack: () -> Unit, savedCount: Int?) {
                 )
             }
         },
-        title = { Text("Favorites") },
+        title = { Text(text = "Favorites", maxLines = 1, overflow = TextOverflow.Ellipsis) },
         actions = {
             val count = savedCount ?: return@TopAppBar
             if (count > 0) {
