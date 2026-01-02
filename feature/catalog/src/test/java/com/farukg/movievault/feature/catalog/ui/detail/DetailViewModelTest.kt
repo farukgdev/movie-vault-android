@@ -209,6 +209,8 @@ class DetailViewModelTest {
         override fun catalogLastUpdatedEpochMillis(): Flow<Long?> = flowOf(null)
 
         override suspend fun isCatalogStale(nowEpochMillis: Long): Boolean = false
+
+        override suspend fun hasCatalogCache(): Boolean = false
     }
 
     private class TestFavoritesRepository : FavoritesRepository {
