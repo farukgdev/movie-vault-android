@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.farukg.movievault.feature.catalog.ui.catalog.CatalogStatusIcon
 import com.farukg.movievault.feature.catalog.ui.catalog.CatalogStatusUi
@@ -31,7 +32,7 @@ fun CatalogTopAppBar(
     onOpenFavorites: () -> Unit,
 ) {
     TopAppBar(
-        title = { Text("MovieVault") },
+        title = { Text(text = "MovieVault", maxLines = 1, overflow = TextOverflow.Ellipsis) },
         actions = {
             StatusActionButton(statusUi = statusUi, onClick = onOpenStatus)
             IconButton(onClick = onOpenFavorites) {
