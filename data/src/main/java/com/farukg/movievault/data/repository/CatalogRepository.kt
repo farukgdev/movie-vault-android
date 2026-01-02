@@ -15,4 +15,6 @@ interface CatalogRepository {
     fun catalogLastUpdatedEpochMillis(): Flow<Long?>
 
     suspend fun isCatalogStale(nowEpochMillis: Long): Boolean
+
+    suspend fun hasCatalogCache(): Boolean
 }

@@ -142,6 +142,9 @@ constructor(
             CachePolicy.isCatalogStale(lastUpdated, nowEpochMillis)
         }
 
+    override suspend fun hasCatalogCache(): Boolean =
+        withContext(Dispatchers.IO) { movieDao.countCatalogMovies() > 0 }
+
     private fun MovieDetail.toEntity(popularRank: Int): MovieEntity =
         MovieEntity(
             id = id,
