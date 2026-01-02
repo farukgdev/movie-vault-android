@@ -47,11 +47,21 @@ class CatalogViewModelRefreshStatusTest {
                 testScheduler.runCurrent()
                 assertEquals(RefreshOrigin.Manual, requestsTurbine.awaitItem())
 
-                vm.onPagingRefreshSnapshot(isLoading = true, error = null, hasItems = true)
+                vm.onPagingRefreshSnapshot(
+                    uiLoading = true,
+                    attemptLoading = true,
+                    error = null,
+                    hasItems = true,
+                )
                 testScheduler.runCurrent()
 
                 val err = AppError.Network()
-                vm.onPagingRefreshSnapshot(isLoading = false, error = err, hasItems = true)
+                vm.onPagingRefreshSnapshot(
+                    uiLoading = false,
+                    attemptLoading = false,
+                    error = err,
+                    hasItems = true,
+                )
                 testScheduler.runCurrent()
 
                 assertEquals(err, eventsTurbine.awaitItem())
@@ -81,11 +91,17 @@ class CatalogViewModelRefreshStatusTest {
 
                     assertEquals(RefreshOrigin.Automatic, awaitItem())
 
-                    vm.onPagingRefreshSnapshot(isLoading = true, error = null, hasItems = false)
+                    vm.onPagingRefreshSnapshot(
+                        uiLoading = true,
+                        attemptLoading = true,
+                        error = null,
+                        hasItems = false,
+                    )
                     testScheduler.runCurrent()
 
                     vm.onPagingRefreshSnapshot(
-                        isLoading = false,
+                        uiLoading = false,
+                        attemptLoading = false,
                         error = AppError.Offline(),
                         hasItems = false,
                     )
@@ -112,7 +128,8 @@ class CatalogViewModelRefreshStatusTest {
                 awaitItem()
 
                 vm.onPagingRefreshSnapshot(
-                    isLoading = false,
+                    uiLoading = false,
+                    attemptLoading = false,
                     error = AppError.Network(),
                     hasItems = false,
                 )
@@ -141,7 +158,12 @@ class CatalogViewModelRefreshStatusTest {
             vm.statusUi.test {
                 awaitItem()
 
-                vm.onPagingRefreshSnapshot(isLoading = true, error = null, hasItems = true)
+                vm.onPagingRefreshSnapshot(
+                    uiLoading = true,
+                    attemptLoading = true,
+                    error = null,
+                    hasItems = true,
+                )
                 testScheduler.runCurrent()
 
                 testScheduler.advanceTimeBy(STATUS_SPINNER_SHOW_DELAY_MS - 1)
@@ -152,7 +174,12 @@ class CatalogViewModelRefreshStatusTest {
                 testScheduler.runCurrent()
                 assertEquals(CatalogStatusIcon.BackgroundRefreshing, vm.statusUi.value.icon)
 
-                vm.onPagingRefreshSnapshot(isLoading = false, error = null, hasItems = true)
+                vm.onPagingRefreshSnapshot(
+                    uiLoading = false,
+                    attemptLoading = false,
+                    error = null,
+                    hasItems = true,
+                )
                 testScheduler.runCurrent()
                 assertEquals(CatalogStatusIcon.BackgroundRefreshing, vm.statusUi.value.icon)
 
@@ -177,20 +204,67 @@ class CatalogViewModelRefreshStatusTest {
             vm.statusUi.test {
                 awaitItem()
 
-                vm.onPagingRefreshSnapshot(isLoading = true, error = null, hasItems = true)
+                vm.onPagingRefreshSnapshot(
+                    uiLoading = true,
+                    attemptLoading = true,
+                    error = null,
+                    hasItems = true,
+                )
                 testScheduler.runCurrent()
 
                 testScheduler.advanceTimeBy(STATUS_SPINNER_SHOW_DELAY_MS - 1)
                 testScheduler.runCurrent()
                 assertEquals(CatalogStatusIcon.Ok, vm.statusUi.value.icon)
 
-                vm.onPagingRefreshSnapshot(isLoading = false, error = null, hasItems = true)
+                vm.onPagingRefreshSnapshot(
+                    uiLoading = false,
+                    attemptLoading = false,
+                    error = null,
+                    hasItems = true,
+                )
 
                 testScheduler.advanceTimeBy(2)
                 testScheduler.runCurrent()
                 assertEquals(CatalogStatusIcon.Ok, vm.statusUi.value.icon)
 
                 cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `fullScreenError retry clears blocking error immediately and emits Automatic refresh request`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val repo = FakeCatalogRepository(stale = false)
+            val vm = CatalogViewModel(repo, SchedulerClock(testScheduler))
+
+            turbineScope {
+                val fullScreenTurbine = vm.fullScreenError.testIn(this)
+                val requestsTurbine = vm.refreshRequests.testIn(this)
+
+                testScheduler.runCurrent()
+
+                assertNull(fullScreenTurbine.awaitItem())
+
+                val err = AppError.Offline()
+                vm.onPagingRefreshSnapshot(
+                    uiLoading = false,
+                    attemptLoading = false,
+                    error = err,
+                    hasItems = false,
+                )
+                testScheduler.runCurrent()
+
+                assertEquals(err, fullScreenTurbine.awaitItem())
+
+                vm.retryFromFullScreenError()
+                testScheduler.runCurrent()
+
+                assertEquals(RefreshOrigin.Automatic, requestsTurbine.awaitItem())
+                // it should immediately clear the error, so UI can show loading state
+                assertNull(fullScreenTurbine.awaitItem())
+
+                fullScreenTurbine.cancelAndIgnoreRemainingEvents()
+                requestsTurbine.cancelAndIgnoreRemainingEvents()
             }
         }
 
@@ -202,6 +276,7 @@ class CatalogViewModelRefreshStatusTest {
 
     private class FakeCatalogRepository(stale: Boolean) : CatalogRepository {
         var staleFlag: Boolean = stale
+        var hasCacheFlag: Boolean = false
         val lastUpdatedFlow = MutableStateFlow<Long?>(null)
 
         override fun catalogLastUpdatedEpochMillis(): Flow<Long?> = lastUpdatedFlow
@@ -212,5 +287,7 @@ class CatalogViewModelRefreshStatusTest {
             flowOf(AppResult.Error(AppError.Http(404)))
 
         override suspend fun isCatalogStale(nowEpochMillis: Long): Boolean = staleFlag
+
+        override suspend fun hasCatalogCache(): Boolean = hasCacheFlag
     }
 }

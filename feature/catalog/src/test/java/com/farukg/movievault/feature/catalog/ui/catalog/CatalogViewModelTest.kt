@@ -88,7 +88,12 @@ class CatalogViewModelTest {
                 testScheduler.runCurrent()
                 assertEquals(RefreshOrigin.Manual, awaitItem())
 
-                vm.onPagingRefreshSnapshot(isLoading = true, error = null, hasItems = true)
+                vm.onPagingRefreshSnapshot(
+                    uiLoading = true,
+                    attemptLoading = true,
+                    error = null,
+                    hasItems = true,
+                )
                 testScheduler.runCurrent()
 
                 // should be ignored while loading
@@ -125,5 +130,7 @@ class CatalogViewModelTest {
             isStaleCalls++
             return staleFlag
         }
+
+        override suspend fun hasCatalogCache(): Boolean = false
     }
 }

@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
@@ -64,12 +65,18 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
     // ----- Internal state model -----
 
     private data class PagingRefreshSnapshot(
-        val isLoading: Boolean = false,
+        val uiLoading: Boolean = false,
+        val attemptLoading: Boolean = false,
         val error: AppError? = null,
         val hasItems: Boolean = false,
     )
 
-    private data class RefreshInFlight(val origin: RefreshOrigin)
+    private data class RefreshInFlight(
+        val origin: RefreshOrigin,
+        // we requested a refresh, but mediator may start later
+        // don't clear inFlight until attemptLoading=true at least once
+        val sawAttemptLoading: Boolean = false,
+    )
 
     private data class LastFailure(val error: AppError, val origin: RefreshOrigin, val at: Long)
 
@@ -100,9 +107,13 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
         val everHadItems: Boolean = false,
         val isStale: Boolean = false,
         val autoRefreshDeferred: Boolean = false,
+        val hasCache: Boolean? = null,
     ) {
         val isRefreshLoading: Boolean
-            get() = paging.isLoading
+            get() = paging.attemptLoading
+
+        val isUiLoading: Boolean
+            get() = paging.uiLoading
 
         val hasItems: Boolean
             get() = paging.hasItems
@@ -112,6 +123,9 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
 
         val isBackgroundRefresh: Boolean
             get() = isRefreshLoading && hasItems && !isManualRefresh
+
+        val shouldSpinTopBar: Boolean
+            get() = !isManualRefresh && (isUiLoading || (inFlight != null && !hasItems))
     }
 
     private val state = MutableStateFlow(CatalogState())
@@ -143,6 +157,24 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
                 ),
             )
 
+    val fullScreenError: StateFlow<AppError?> =
+        state
+            .map { s ->
+                val err = s.paging.error
+
+                val show =
+                    s.hasCache == false &&
+                        !s.paging.hasItems &&
+                        !s.everHadItems &&
+                        !s.paging.attemptLoading &&
+                        s.inFlight == null &&
+                        err != null
+
+                if (show) err else null
+            }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     private var lastResumeRefreshAtEpochMillis: Long = 0L
 
     init {
@@ -158,9 +190,15 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
                             history = s.history.onSuccess(at),
                             isStale = false,
                             autoRefreshDeferred = false,
+                            hasCache = true,
                         )
                     }
                 }
+        }
+
+        viewModelScope.launch {
+            val has = repository.hasCatalogCache()
+            state.update { it.copy(hasCache = has) }
         }
 
         startTopBarSpinnerController()
@@ -195,28 +233,65 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
         requestRefresh(RefreshOrigin.Manual)
     }
 
+    fun retryFromFullScreenError() {
+        if (state.value.isRefreshLoading) return
+        requestRefresh(RefreshOrigin.Automatic)
+    }
+
     // UI -> VM: called when LazyPagingItems refresh load state / itemCount changes
-    fun onPagingRefreshSnapshot(isLoading: Boolean, error: AppError?, hasItems: Boolean) {
-        val prev = state.value.paging
-        val next = PagingRefreshSnapshot(isLoading = isLoading, error = error, hasItems = hasItems)
+    fun onPagingRefreshSnapshot(
+        uiLoading: Boolean,
+        attemptLoading: Boolean,
+        error: AppError?,
+        hasItems: Boolean,
+    ) {
+        val prevPaging = state.value.paging
+        val isNewError = error != null && error != prevPaging.error
+        val origin = state.value.inFlight?.origin ?: RefreshOrigin.Automatic
+        val at = if (isNewError) clock.now() else 0L
 
-        state.update { s -> s.copy(paging = next, everHadItems = s.everHadItems || hasItems) }
+        state.update { s ->
+            val nextPaging =
+                PagingRefreshSnapshot(
+                    uiLoading = uiLoading,
+                    attemptLoading = attemptLoading,
+                    error = error,
+                    hasItems = hasItems,
+                )
 
-        // new refresh error
-        if (error != null && error != prev.error) {
-            val origin = state.value.inFlight?.origin ?: RefreshOrigin.Automatic
-            val at = clock.now()
+            val base =
+                s.copy(
+                    paging = nextPaging,
+                    everHadItems = s.everHadItems || hasItems,
+                    hasCache = if (hasItems) true else s.hasCache,
+                )
 
-            state.update { s -> s.copy(history = s.history.onFailure(error, origin, at)) }
+            // attempt lifecycle
+            val inflight = base.inFlight
+            val newInflight =
+                when {
+                    inflight == null -> null
+                    attemptLoading -> {
+                        if (inflight.sawAttemptLoading) inflight
+                        else inflight.copy(sawAttemptLoading = true)
+                    }
+                    inflight.sawAttemptLoading && !attemptLoading -> null // attempt ended
+                    else -> inflight // waiting for mediator to start
+                }
 
-            if (origin == RefreshOrigin.Manual) {
-                _refreshEvents.tryEmit(error)
-            }
+            // new refresh error
+            val newHistory =
+                if (isNewError) {
+                    base.history.onFailure(error, origin, at)
+                } else {
+                    base.history
+                }
+
+            base.copy(inFlight = newInflight, history = newHistory)
         }
 
-        // refresh finished (success or error)
-        if (prev.isLoading && !isLoading) {
-            state.update { s -> s.copy(inFlight = null) }
+        if (isNewError && origin == RefreshOrigin.Manual) {
+            _refreshEvents.tryEmit(error)
         }
     }
 
@@ -225,7 +300,19 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
     private fun requestRefresh(origin: RefreshOrigin) {
         val emitted = _refreshRequests.tryEmit(origin)
         if (emitted) {
-            state.update { s -> s.copy(inFlight = RefreshInFlight(origin)) }
+            state.update { s -> s.copy(inFlight = RefreshInFlight(origin = origin)) }
+        }
+    }
+
+    private data class SpinnerSignal(val shouldSpin: Boolean, val showDelayMs: Long)
+
+    private fun CatalogState.spinnerShowDelayMs(): Long {
+        val cachePresentOrUnknown = hasCache != false
+
+        return when {
+            paging.hasItems -> STATUS_SPINNER_SHOW_DELAY_MS
+            cachePresentOrUnknown -> STATUS_SPINNER_SHOW_DELAY_MS
+            else -> 0L // no cache
         }
     }
 
@@ -234,13 +321,14 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
             var shownAt = 0L
 
             state
-                .map { it.isBackgroundRefresh }
+                .map { s -> SpinnerSignal(s.shouldSpinTopBar, s.spinnerShowDelayMs()) }
                 .distinctUntilChanged()
-                .collect { shouldSpin ->
-                    if (shouldSpin) {
-                        delay(STATUS_SPINNER_SHOW_DELAY_MS)
-                        if (state.value.isBackgroundRefresh) {
-                            state.update { s -> s.copy(showTopBarSpinner = true) }
+                .collectLatest { signal ->
+                    if (signal.shouldSpin) {
+                        if (signal.showDelayMs > 0) delay(signal.showDelayMs)
+
+                        if (state.value.shouldSpinTopBar) {
+                            state.update { it.copy(showTopBarSpinner = true) }
                             shownAt = clock.now()
                         }
                     } else {
@@ -249,7 +337,7 @@ constructor(private val repository: CatalogRepository, private val clock: Clock)
                             val remaining = STATUS_SPINNER_MIN_VISIBLE_MS - elapsed
                             if (remaining > 0) delay(remaining)
                         }
-                        state.update { s -> s.copy(showTopBarSpinner = false) }
+                        state.update { it.copy(showTopBarSpinner = false) }
                     }
                 }
         }

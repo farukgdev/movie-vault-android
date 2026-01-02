@@ -99,7 +99,8 @@ fun CatalogScreen(
     refreshEvents: Flow<AppError>,
     isManualRefreshing: Boolean,
     everHadItems: Boolean,
-    onRetry: () -> Unit,
+    fullScreenError: AppError?,
+    onRetryInitialLoad: () -> Unit,
     onRefresh: () -> Unit,
     onOpenDetail: (movieId: Long) -> Unit,
     onOpenFavorites: () -> Unit,
@@ -166,20 +167,11 @@ fun CatalogScreen(
                 },
             ) {
                 when {
-                    refresh is LoadState.Error && !hasItemsNow && !everHadItems -> {
-                        val err = refresh.error.toAppError()
+                    fullScreenError != null -> {
                         ErrorState(
                             modifier = Modifier.fillMaxSize(),
-                            message = err.userMessage(),
-                            onRetry = onRetry,
-                        )
-                    }
-
-                    statusUi.error != null && !hasItemsNow && !everHadItems -> {
-                        ErrorState(
-                            modifier = Modifier.fillMaxSize(),
-                            message = statusUi.error.userMessage(),
-                            onRetry = onRetry,
+                            message = fullScreenError.userMessage(),
+                            onRetry = onRetryInitialLoad,
                         )
                     }
 

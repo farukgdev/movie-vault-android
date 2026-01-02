@@ -15,8 +15,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.CombinedLoadStates
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
+import com.farukg.movievault.core.error.AppError
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 
@@ -28,6 +30,7 @@ fun CatalogRouteScreen(
 ) {
     val viewModel: CatalogViewModel = hiltViewModel()
     val movies = viewModel.moviesPaging.collectAsLazyPagingItems()
+    val fullScreenError by viewModel.fullScreenError.collectAsStateWithLifecycle()
 
     val savedScroll by viewModel.scrollPosition.collectAsStateWithLifecycle()
     val initialScroll = remember { savedScroll }
@@ -77,23 +80,21 @@ fun CatalogRouteScreen(
     LaunchedEffect(Unit) {
         snapshotFlow { movies.loadState to movies.itemCount }
             .collectLatest { (loadState, count) ->
-                val refreshState = loadState.mediator?.refresh ?: loadState.refresh
-                val isLoading = refreshState is LoadState.Loading
-                val error = (refreshState as? LoadState.Error)?.error?.toAppError()
+                val sig = computeRefreshSignals(loadState)
 
                 viewModel.onPagingRefreshSnapshot(
-                    isLoading = isLoading,
-                    error = error,
+                    uiLoading = sig.uiLoading,
+                    attemptLoading = sig.attemptLoading,
+                    error = sig.attemptError,
                     hasItems = count > 0,
                 )
-                // pending refresh request: only scroll when it is successful
-                val pending = pendingScrollOrigin
-                if (pending != null) {
-                    if (refreshState is LoadState.Loading) {
+
+                // scroll to top only after the refresh succeeds
+                pendingScrollOrigin?.let { pending ->
+                    if (sig.attemptLoading) {
                         sawLoadingForPending = true
                     } else if (sawLoadingForPending) {
-                        val success = refreshState is LoadState.NotLoading
-                        if (success) {
+                        if (sig.attemptSuccess) {
                             val shouldScroll =
                                 when (pending) {
                                     RefreshOrigin.Manual -> true
@@ -119,10 +120,42 @@ fun CatalogRouteScreen(
         refreshEvents = viewModel.refreshEvents,
         isManualRefreshing = manualRefreshing,
         everHadItems = everHadItems,
-        onRetry = { movies.retry() },
+        fullScreenError = fullScreenError,
+        onRetryInitialLoad = viewModel::retryFromFullScreenError,
         onRefresh = viewModel::requestManualRefresh,
         onOpenDetail = onOpenDetail,
         onOpenFavorites = onOpenFavorites,
         modifier = modifier,
+    )
+}
+
+private data class RefreshSignals(
+    val uiLoading: Boolean,
+    val attemptLoading: Boolean,
+    val attemptError: AppError?,
+    val attemptSuccess: Boolean,
+)
+
+private fun computeRefreshSignals(loadState: CombinedLoadStates): RefreshSignals {
+    // source.refresh: Room query (DB load/invalidation)
+    // mediator.refresh: network refresh attempt (RemoteMediator)
+    // do not treat source refresh transitions as "refresh attempt finished"
+
+    val source = loadState.refresh
+    val mediator = loadState.mediator?.refresh
+
+    // user-perceived loading
+    val uiLoading = (source is LoadState.Loading) || (mediator is LoadState.Loading)
+
+    val attempt = mediator ?: source
+    val attemptLoading = attempt is LoadState.Loading
+    val attemptError = (attempt as? LoadState.Error)?.error?.toAppError()
+    val attemptSuccess = (attempt is LoadState.NotLoading) && attemptError == null
+
+    return RefreshSignals(
+        uiLoading = uiLoading,
+        attemptLoading = attemptLoading,
+        attemptError = attemptError,
+        attemptSuccess = attemptSuccess,
     )
 }
