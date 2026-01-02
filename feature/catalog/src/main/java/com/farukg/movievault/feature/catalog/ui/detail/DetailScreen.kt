@@ -1,5 +1,6 @@
 package com.farukg.movievault.feature.catalog.ui.detail
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -13,14 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Favorite
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,38 +36,13 @@ import com.farukg.movievault.feature.catalog.ui.components.detailPosterHeightDp
 fun DetailScreen(
     uiState: DetailUiState,
     onRetry: () -> Unit,
-    onBack: () -> Unit,
-    onToggleFavorite: () -> Unit,
+    scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = modifier.fillMaxSize().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Back",
-                )
-            }
-
-            Text(
-                text = "Details",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.weight(1f),
-            )
-
-            IconButton(onClick = onToggleFavorite) {
-                val isFav = (uiState as? DetailUiState.Content)?.isFavorite == true
-                Icon(
-                    imageVector =
-                        if (isFav) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = if (isFav) "Unfavorite" else "Favorite",
-                )
-            }
-        }
-
         val bodyModifier = Modifier.weight(1f).fillMaxWidth()
 
         when (uiState) {
@@ -88,8 +57,6 @@ fun DetailScreen(
                 )
 
             is DetailUiState.Content -> {
-                val scrollState = rememberScrollState()
-
                 Column(
                     modifier = bodyModifier.verticalScroll(scrollState),
                     verticalArrangement = Arrangement.spacedBy(12.dp),

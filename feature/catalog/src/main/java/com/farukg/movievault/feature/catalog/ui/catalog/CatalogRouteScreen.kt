@@ -1,12 +1,16 @@
 package com.farukg.movievault.feature.catalog.ui.catalog
 
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
@@ -19,12 +23,18 @@ import androidx.paging.CombinedLoadStates
 import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.farukg.movievault.core.error.AppError
+import com.farukg.movievault.core.ui.scaffold.RegisterTopBar
+import com.farukg.movievault.feature.catalog.navigation.CatalogRoute
+import com.farukg.movievault.feature.catalog.ui.catalog.topbar.CatalogStatusSheetContent
+import com.farukg.movievault.feature.catalog.ui.catalog.topbar.CatalogTopAppBar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CatalogRouteScreen(
-    onOpenDetail: (movieId: Long) -> Unit,
+    onOpenDetail: (movieId: Long, title: String) -> Unit,
     onOpenFavorites: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -58,6 +68,20 @@ fun CatalogRouteScreen(
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
+    }
+
+    var showStatusSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+
+    val statusUi by viewModel.statusUi.collectAsStateWithLifecycle()
+
+    RegisterTopBar(CatalogRoute) {
+        CatalogTopAppBar(
+            statusUi = statusUi,
+            onOpenStatus = { showStatusSheet = true },
+            onOpenFavorites = onOpenFavorites,
+        )
     }
 
     suspend fun scrollToTopSmart() {
@@ -109,7 +133,6 @@ fun CatalogRouteScreen(
             }
     }
 
-    val statusUi by viewModel.statusUi.collectAsStateWithLifecycle()
     val manualRefreshing by viewModel.manualRefreshing.collectAsStateWithLifecycle()
     val everHadItems by viewModel.everHadItems.collectAsStateWithLifecycle()
 
@@ -124,9 +147,37 @@ fun CatalogRouteScreen(
         onRetryInitialLoad = viewModel::retryFromFullScreenError,
         onRefresh = viewModel::requestManualRefresh,
         onOpenDetail = onOpenDetail,
-        onOpenFavorites = onOpenFavorites,
         modifier = modifier,
     )
+
+    if (showStatusSheet) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                scope.launch {
+                    sheetState.hide()
+                    showStatusSheet = false
+                }
+            },
+            sheetState = sheetState,
+        ) {
+            CatalogStatusSheetContent(
+                statusUi = statusUi,
+                onRefreshNow = {
+                    viewModel.requestManualRefresh()
+                    scope.launch {
+                        sheetState.hide()
+                        showStatusSheet = false
+                    }
+                },
+                onDismiss = {
+                    scope.launch {
+                        sheetState.hide()
+                        showStatusSheet = false
+                    }
+                },
+            )
+        }
+    }
 }
 
 private data class RefreshSignals(

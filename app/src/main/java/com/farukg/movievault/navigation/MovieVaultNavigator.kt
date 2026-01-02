@@ -15,7 +15,8 @@ class MovieVaultNavigator(private val backStack: MutableList<NavKey>) {
 
     private var inFlight: InFlight? = null
 
-    fun openDetail(movieId: Long) = navigateTo(DetailRoute(movieId))
+    fun openDetail(movieId: Long, initialTitle: String? = null) =
+        navigateTo(DetailRoute(movieId, initialTitle))
 
     fun openFavorites() = navigateTo(FavoritesRoute)
 
