@@ -61,13 +61,13 @@ class Migration1To2Test {
         // Apply migration
         val roomDb =
             Room.databaseBuilder(context, MovieVaultDatabase::class.java, dbName)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .allowMainThreadQueries()
                 .build()
 
         val migratedDb = roomDb.openHelper.writableDatabase
 
-        assertEquals(3L, queryLong(migratedDb, "PRAGMA user_version"))
+        assertEquals(4L, queryLong(migratedDb, "PRAGMA user_version"))
 
         // Verify cache_metadata table exists
         assertEquals(

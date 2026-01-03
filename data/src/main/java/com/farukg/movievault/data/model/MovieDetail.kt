@@ -10,4 +10,5 @@ data class MovieDetail(
     val runtimeMinutes: Int? = null,
     val posterUrl: String? = null,
     val isFavorite: Boolean = false,
+    val detailFetchedAtEpochMillis: Long? = null,
 )

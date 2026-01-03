@@ -8,6 +8,7 @@ import com.farukg.movievault.data.local.dao.FavoriteDao
 import com.farukg.movievault.data.local.dao.MovieDao
 import com.farukg.movievault.data.local.db.MIGRATION_1_2
 import com.farukg.movievault.data.local.db.MIGRATION_2_3
+import com.farukg.movievault.data.local.db.MIGRATION_3_4
 import com.farukg.movievault.data.local.db.MovieVaultDatabase
 import dagger.Module
 import dagger.Provides
@@ -24,7 +25,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): MovieVaultDatabase =
         Room.databaseBuilder(context, MovieVaultDatabase::class.java, "movievault.db")
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
             .build()
 
     @Provides

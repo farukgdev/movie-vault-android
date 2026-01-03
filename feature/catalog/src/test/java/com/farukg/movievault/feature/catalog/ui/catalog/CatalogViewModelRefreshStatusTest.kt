@@ -10,6 +10,7 @@ import com.farukg.movievault.core.time.Clock
 import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.model.MovieDetail
 import com.farukg.movievault.data.repository.CatalogRepository
+import com.farukg.movievault.data.repository.MovieDetailCacheState
 import com.farukg.movievault.feature.catalog.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -285,6 +286,12 @@ class CatalogViewModelRefreshStatusTest {
 
         override fun movieDetail(movieId: Long): Flow<AppResult<MovieDetail>> =
             flowOf(AppResult.Error(AppError.Http(404)))
+
+        override suspend fun refreshMovieDetail(movieId: Long): AppResult<Unit> =
+            AppResult.Success(Unit)
+
+        override suspend fun movieDetailCacheState(movieId: Long): MovieDetailCacheState =
+            MovieDetailCacheState.Missing
 
         override suspend fun isCatalogStale(nowEpochMillis: Long): Boolean = staleFlag
 

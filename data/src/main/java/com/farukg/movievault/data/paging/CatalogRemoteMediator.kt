@@ -102,6 +102,7 @@ class CatalogRemoteMediator(
                                 runtimeMinutes = existing?.runtimeMinutes,
                                 genres = existing?.genres ?: emptyList(),
                                 popularRank = baseRank + index,
+                                detailFetchedAtEpochMillis = existing?.detailFetchedAtEpochMillis,
                             )
                         }
 
