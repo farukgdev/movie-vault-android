@@ -4,9 +4,8 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,8 +17,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -52,9 +53,17 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.itemContentType
@@ -67,7 +76,9 @@ import com.farukg.movievault.core.ui.components.MetaPill
 import com.farukg.movievault.core.ui.components.MoviePoster
 import com.farukg.movievault.core.ui.components.MovieVaultCard
 import com.farukg.movievault.core.ui.components.RatingPill
-import com.farukg.movievault.feature.catalog.ui.components.catalogPosterHeightDp
+import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.min
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
@@ -75,11 +86,27 @@ import kotlinx.coroutines.flow.collectLatest
 private const val EMPTY_DEBOUNCE_MS = 300L
 private const val AUTO_RETRY_THROTTLE_MS = 3_000L
 
+private val CatalogGridSpacing = 12.dp
+private val CatalogGridContentPadding =
+    PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 6.dp)
+
+private val CatalogGridMaxContentWidth = 1400.dp
+
+private val CatalogMinCardWidth = 128.dp
+private val CatalogMaxCardWidth = 240.dp
+
+private val CatalogMetaRowMinHeight = 26.dp
+
+private val GridPosterShape =
+    RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
+
+private const val COLUMNS_HARD_CAP = 12
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CatalogScreen(
     movies: LazyPagingItems<MovieRowUi>,
-    listState: LazyListState,
+    gridState: LazyGridState,
     statusUi: CatalogStatusUi,
     refreshEvents: Flow<AppError>,
     isManualRefreshing: Boolean,
@@ -122,7 +149,7 @@ fun CatalogScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         PullToRefreshBox(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+            modifier = Modifier.fillMaxSize(),
             isRefreshing = manualRefreshingUi,
             onRefresh = { if (!isManualRefreshing) onRefresh() },
             state = pullState,
@@ -143,11 +170,6 @@ fun CatalogScreen(
                     )
                 }
 
-                // (e.g. when coming back from Detail)
-                !hasItemsNow && everHadItems -> {
-                    CatalogSkeletonList(modifier = Modifier.fillMaxSize())
-                }
-
                 showEmpty -> {
                     EmptyState(
                         modifier = Modifier.fillMaxSize(),
@@ -158,17 +180,34 @@ fun CatalogScreen(
                     )
                 }
 
-                !hasItemsNow -> {
-                    CatalogSkeletonList(modifier = Modifier.fillMaxSize())
-                }
-
                 else -> {
-                    CatalogList(
-                        movies = movies,
-                        append = append,
-                        listState = listState,
-                        onOpenDetail = onOpenDetail,
-                    )
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val layout =
+                            rememberCatalogGridLayout(
+                                maxWidth = maxWidth,
+                                maxHeight = maxHeight,
+                                titleStyle = MaterialTheme.typography.titleMedium,
+                            )
+
+                        val containerPadding =
+                            PaddingValues(start = layout.sideGutter, end = layout.sideGutter)
+
+                        if (!hasItemsNow) {
+                            CatalogSkeletonGrid(
+                                modifier = Modifier.fillMaxSize().padding(containerPadding),
+                                columns = layout.columns,
+                            )
+                        } else {
+                            CatalogGrid(
+                                modifier = Modifier.fillMaxSize().padding(containerPadding),
+                                columns = layout.columns,
+                                movies = movies,
+                                append = append,
+                                gridState = gridState,
+                                onOpenDetail = onOpenDetail,
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -182,6 +221,81 @@ fun CatalogScreen(
         ) { data ->
             MovieVaultSnackbar(data = data, modifier = Modifier.fillMaxWidth())
         }
+    }
+}
+
+private data class CatalogGridLayout(val columns: Int, val sideGutter: Dp)
+
+@Composable
+private fun rememberCatalogGridLayout(
+    maxWidth: Dp,
+    maxHeight: Dp,
+    titleStyle: TextStyle,
+): CatalogGridLayout {
+    val density = LocalDensity.current
+
+    // limit content width on huge screens
+    val contentWidth = min(maxWidth, CatalogGridMaxContentWidth)
+    val sideGutter = ((maxWidth - contentWidth) / 2f).coerceAtLeast(0.dp)
+
+    val contentWidthPx = with(density) { contentWidth.toPx() }
+    val heightPx = with(density) { maxHeight.toPx() }
+    val spacingPx = with(density) { CatalogGridSpacing.toPx() }
+    val hPadPx =
+        with(density) {
+            (CatalogGridContentPadding.calculateLeftPadding(LayoutDirection.Ltr) +
+                    CatalogGridContentPadding.calculateRightPadding(LayoutDirection.Ltr))
+                .toPx()
+        }
+
+    val minCardWidthPx = with(density) { CatalogMinCardWidth.toPx() }
+    val maxCardWidthPx = with(density) { CatalogMaxCardWidth.toPx() }
+
+    val lineHeight: TextUnit =
+        if (titleStyle.lineHeight != TextUnit.Unspecified) titleStyle.lineHeight
+        else (titleStyle.fontSize * 1.2f)
+
+    val titleTwoLinesPx = with(density) { lineHeight.toPx() } * 2f
+
+    val belowPosterContentHeightPx =
+        with(density) { (12.dp * 2 + CatalogMetaRowMinHeight + 10.dp).toPx() } + titleTwoLinesPx
+
+    val wantTwoRows = (contentWidth >= 840.dp) || (maxHeight >= 600.dp)
+
+    val verticalGutterPx = with(density) { 16.dp.toPx() }
+    val maxCellHeightPx =
+        if (wantTwoRows) {
+            max(0f, (heightPx - verticalGutterPx - spacingPx) / 2f)
+        } else {
+            max(0f, heightPx - verticalGutterPx)
+        }
+
+    val maxPosterHeightPx = max(0f, maxCellHeightPx - belowPosterContentHeightPx)
+    val maxCellWidthByHeightPx =
+        if (maxPosterHeightPx > 0f) (maxPosterHeightPx / 1.5f) else maxCardWidthPx
+
+    val maxAllowedCardWidthPx = min(maxCardWidthPx, maxCellWidthByHeightPx)
+
+    val availableWidthPx = max(0f, contentWidthPx - hPadPx)
+
+    val minCols = if (availableWidthPx < (2f * minCardWidthPx + spacingPx)) 1 else 2
+
+    val maxColsByMinWidth =
+        floor((availableWidthPx + spacingPx) / (minCardWidthPx + spacingPx))
+            .toInt()
+            .coerceIn(minCols, COLUMNS_HARD_CAP)
+
+    var chosen = maxColsByMinWidth
+    for (c in minCols..maxColsByMinWidth) {
+        val cellWidthPx = (availableWidthPx - spacingPx * (c - 1)) / c.toFloat()
+        if (cellWidthPx <= maxAllowedCardWidthPx) {
+            chosen = c
+            break
+        }
+    }
+
+    return remember(maxWidth, maxHeight, titleStyle, sideGutter, chosen) {
+        CatalogGridLayout(columns = chosen, sideGutter = sideGutter)
     }
 }
 
@@ -199,22 +313,30 @@ private fun rememberDelayedTrue(target: Boolean, delayMs: Long): Boolean {
 }
 
 @Composable
-private fun CatalogSkeletonList(modifier: Modifier = Modifier, count: Int = 10) {
-    LazyColumn(
+private fun CatalogSkeletonGrid(modifier: Modifier = Modifier, columns: Int, count: Int = 12) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(columns),
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = CatalogGridContentPadding,
+        horizontalArrangement = Arrangement.spacedBy(CatalogGridSpacing),
+        verticalArrangement = Arrangement.spacedBy(CatalogGridSpacing),
     ) {
-        items(count, key = { "skeleton_$it" }) { MovieRowPlaceholder() }
+        items(count, key = { "skeleton_$it" }) { MovieGridCellPlaceholder() }
+
+        item(key = "skeleton_footer", span = { GridItemSpan(maxLineSpan) }) {
+            Spacer(Modifier.height(24.dp))
+        }
     }
 }
 
 @Composable
-private fun CatalogList(
+private fun CatalogGrid(
+    columns: Int,
     movies: LazyPagingItems<MovieRowUi>,
     append: LoadState,
-    listState: LazyListState,
+    gridState: LazyGridState,
     onOpenDetail: (movieId: Long, title: String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var stickyAppendError by remember { mutableStateOf<AppError?>(null) }
     var stickyAtCount by remember { mutableIntStateOf(0) }
@@ -230,11 +352,13 @@ private fun CatalogList(
         if (movies.itemCount > stickyAtCount) stickyAppendError = null
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 6.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(columns),
+        state = gridState,
+        modifier = modifier.fillMaxSize(),
+        contentPadding = CatalogGridContentPadding,
+        horizontalArrangement = Arrangement.spacedBy(CatalogGridSpacing),
+        verticalArrangement = Arrangement.spacedBy(CatalogGridSpacing),
     ) {
         items(
             count = movies.itemCount,
@@ -243,9 +367,9 @@ private fun CatalogList(
         ) { index ->
             val row = movies[index]
             if (row == null) {
-                MovieRowPlaceholder()
+                MovieGridCellPlaceholder()
             } else {
-                MovieRow(
+                MovieGridCell(
                     title = row.title,
                     releaseYear = row.releaseYear,
                     rating = row.rating,
@@ -255,7 +379,8 @@ private fun CatalogList(
             }
         }
 
-        item(key = "append_footer", contentType = "footer") {
+        // span all columns
+        item(key = "append_footer", contentType = "footer", span = { GridItemSpan(maxLineSpan) }) {
             AppendFooter(
                 append = append,
                 stickyError = stickyAppendError,
@@ -264,7 +389,131 @@ private fun CatalogList(
         }
     }
 
-    AutoRetryAppendOnScroll(movies = movies, append = append, listState = listState)
+    AutoRetryAppendOnScroll(movies = movies, append = append, gridState = gridState)
+}
+
+@Composable
+private fun MovieGridCell(
+    title: String,
+    releaseYear: Int?,
+    rating: Double?,
+    posterUrl: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    MovieVaultCard(onClick = onClick, modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            MoviePoster(
+                posterUrl = posterUrl,
+                contentDescription = "$title poster",
+                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
+                shape = GridPosterShape,
+            )
+
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                val hasBoth = rating != null && releaseYear != null
+                val yearText = releaseYear?.toString()
+
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = CatalogMetaRowMinHeight),
+                    horizontalArrangement =
+                        if (hasBoth) Arrangement.SpaceBetween else Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    when {
+                        rating != null -> RatingPill(rating = rating)
+                        yearText != null -> MetaPill(text = yearText)
+                    }
+                    if (hasBoth) MetaPill(text = yearText!!)
+                }
+
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    minLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MovieGridCellPlaceholder(modifier: Modifier = Modifier) {
+    MovieVaultCard(modifier = modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Spacer(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .aspectRatio(2f / 3f)
+                        .clip(GridPosterShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
+
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = CatalogMetaRowMinHeight),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PillSkeleton(width = 56.dp)
+                    PillSkeleton(width = 56.dp)
+                }
+                val titleStyle = MaterialTheme.typography.titleMedium
+                val titleHeight = rememberTwoLineTitleHeightDp(titleStyle)
+                Column(
+                    modifier = Modifier.fillMaxWidth().height(titleHeight),
+                    verticalArrangement = Arrangement.SpaceAround,
+                ) {
+                    SkeletonLine(widthFraction = 0.88f, height = 18.dp)
+                    SkeletonLine(widthFraction = 0.70f, height = 18.dp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun rememberTwoLineTitleHeightDp(style: TextStyle): Dp {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+
+    val result =
+        remember(style) {
+            measurer.measure(text = AnnotatedString("A\nA"), style = style, maxLines = 2)
+        }
+
+    return with(density) { result.size.height.toDp() }
+}
+
+@Composable
+private fun SkeletonLine(widthFraction: Float, height: Dp) {
+    Spacer(
+        modifier =
+            Modifier.fillMaxWidth(widthFraction)
+                .height(height)
+                .clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+    )
+}
+
+@Composable
+private fun PillSkeleton(width: Dp, modifier: Modifier = Modifier) {
+    Spacer(
+        modifier =
+            modifier
+                .height(CatalogMetaRowMinHeight)
+                .width(width)
+                .clip(RoundedCornerShape(999.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+    )
 }
 
 @Composable
@@ -340,14 +589,14 @@ private fun AppendErrorBlock(err: AppError, onRetry: () -> Unit) {
 private fun AutoRetryAppendOnScroll(
     movies: LazyPagingItems<MovieRowUi>,
     append: LoadState,
-    listState: LazyListState,
+    gridState: LazyGridState,
 ) {
     var lastAutoRetryAt by remember { mutableLongStateOf(0L) }
 
-    LaunchedEffect(movies, listState, append) {
+    LaunchedEffect(movies, gridState, append) {
         snapshotFlow {
-                val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                val isScrolling = listState.isScrollInProgress
+                val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                val isScrolling = gridState.isScrollInProgress
                 lastVisible to isScrolling
             }
             .collectLatest { (lastVisible, isScrolling) ->
@@ -366,91 +615,6 @@ private fun AutoRetryAppendOnScroll(
                 lastAutoRetryAt = now
                 movies.retry()
             }
-    }
-}
-
-@Composable
-private fun MovieRow(
-    title: String,
-    releaseYear: Int?,
-    rating: Double?,
-    posterUrl: String?,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    MovieVaultCard(onClick = onClick, modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val posterHeight = catalogPosterHeightDp()
-
-            MoviePoster(
-                posterUrl = posterUrl,
-                contentDescription = "$title poster",
-                modifier = Modifier.height(posterHeight).aspectRatio(2f / 3f),
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-
-                if (releaseYear != null || rating != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    @OptIn(ExperimentalLayoutApi::class)
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        releaseYear?.let { MetaPill(text = it.toString()) }
-                        rating?.let { RatingPill(rating = it) }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MovieRowPlaceholder(modifier: Modifier = Modifier) {
-    MovieVaultCard(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val posterHeight = catalogPosterHeightDp()
-            Spacer(
-                modifier =
-                    Modifier.height(posterHeight)
-                        .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Spacer(
-                    Modifier.fillMaxWidth(0.6f)
-                        .height(18.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                )
-                Spacer(Modifier.height(10.dp))
-                Spacer(
-                    Modifier.fillMaxWidth(0.45f)
-                        .height(14.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                )
-            }
-        }
     }
 }
 
