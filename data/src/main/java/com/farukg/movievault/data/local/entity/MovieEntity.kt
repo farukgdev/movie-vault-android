@@ -14,4 +14,5 @@ data class MovieEntity(
     val runtimeMinutes: Int?,
     val genres: List<String>,
     val popularRank: Int, // catalog ordering: >=0 means "in catalog", -1 means "not in catalog"
+    val detailFetchedAtEpochMillis: Long? = null,
 )

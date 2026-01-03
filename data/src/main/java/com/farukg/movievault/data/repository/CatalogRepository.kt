@@ -6,11 +6,20 @@ import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.model.MovieDetail
 import kotlinx.coroutines.flow.Flow
 
-interface CatalogRepository {
+enum class MovieDetailCacheState {
+    Missing,
+    Partial,
+    Fetched,
+}
 
+interface CatalogRepository {
     fun catalogPaging(): Flow<PagingData<Movie>>
 
     fun movieDetail(movieId: Long): Flow<AppResult<MovieDetail>>
+
+    suspend fun refreshMovieDetail(movieId: Long): AppResult<Unit>
+
+    suspend fun movieDetailCacheState(movieId: Long): MovieDetailCacheState
 
     fun catalogLastUpdatedEpochMillis(): Flow<Long?>
 

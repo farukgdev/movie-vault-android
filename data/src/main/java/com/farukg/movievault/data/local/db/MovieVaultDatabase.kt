@@ -20,7 +20,7 @@ import com.farukg.movievault.data.local.entity.MovieEntity
             CacheMetadataEntity::class,
             CatalogRemoteKeyEntity::class,
         ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(RoomConverters::class)

@@ -15,7 +15,6 @@ import com.farukg.movievault.data.local.dao.FavoriteDao
 import com.farukg.movievault.data.local.dao.MovieDao
 import com.farukg.movievault.data.local.db.MovieVaultDatabase
 import com.farukg.movievault.data.local.entity.MovieEntity
-import com.farukg.movievault.data.local.mapper.hasDetailFields
 import com.farukg.movievault.data.local.mapper.toDomainDetail
 import com.farukg.movievault.data.local.model.CatalogMovieRow
 import com.farukg.movievault.data.model.Movie
@@ -25,14 +24,13 @@ import com.farukg.movievault.data.remote.CatalogRemoteDataSource
 import com.farukg.movievault.data.remote.tmdb.TmdbImageSize
 import com.farukg.movievault.data.remote.tmdb.tmdbWithSizeOrNull
 import com.farukg.movievault.data.repository.CatalogRepository
+import com.farukg.movievault.data.repository.MovieDetailCacheState
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Singleton
@@ -85,52 +83,43 @@ constructor(
                 }
             }
 
-    override fun movieDetail(movieId: Long): Flow<AppResult<MovieDetail>> = channelFlow {
-        val existing = withContext(Dispatchers.IO) { movieDao.getMovie(movieId) }
+    override fun movieDetail(movieId: Long): Flow<AppResult<MovieDetail>> =
+        combine(movieDao.observeMovie(movieId), favoriteDao.observeFavoriteIds()) { entity, favIds
+            ->
+            val favSet = favIds.toHashSet()
+            if (entity == null) {
+                AppResult.Error(AppError.Http(code = 404))
+            } else {
+                AppResult.Success(entity.toDomainDetail(isFavorite = favSet.contains(movieId)))
+            }
+        }
 
-        if (existing == null) {
-            // No cached row
-            when (val fetched = withContext(Dispatchers.IO) { remote.fetchMovieDetail(movieId) }) {
+    override suspend fun refreshMovieDetail(movieId: Long): AppResult<Unit> =
+        withContext(Dispatchers.IO) {
+            val existing = movieDao.getMovie(movieId)
+            val rank = existing?.popularRank ?: NOT_IN_CATALOG_RANK
+
+            when (val fetched = remote.fetchMovieDetail(movieId)) {
                 is AppResult.Success -> {
-                    val merged = fetched.data.toEntity(popularRank = NOT_IN_CATALOG_RANK)
-                    withContext(Dispatchers.IO) { movieDao.upsert(merged) }
+                    val merged =
+                        fetched.data.toEntity(
+                            popularRank = rank,
+                            detailFetchedAtEpochMillis = System.currentTimeMillis(),
+                        )
+                    movieDao.upsert(merged)
+                    AppResult.Success(Unit)
                 }
-                is AppResult.Error -> {
-                    send(AppResult.Error(fetched.error))
-                    return@channelFlow
-                }
-            }
-        } else if (!existing.hasDetailFields()) {
-            // Emit cached row immediately and refresh details in background
-            launch(Dispatchers.IO) {
-                when (val fetched = remote.fetchMovieDetail(movieId)) {
-                    is AppResult.Success -> {
-                        val merged = fetched.data.toEntity(popularRank = existing.popularRank)
-                        movieDao.upsert(merged)
-                    }
-                    is AppResult.Error -> {
-                        // Non-blocking: keep partial cached row visible
-                    }
-                }
+                is AppResult.Error -> AppResult.Error(fetched.error)
             }
         }
 
-        launch {
-            combine(movieDao.observeMovie(movieId), favoriteDao.observeFavoriteIds()) {
-                    entity,
-                    favIds ->
-                    val favSet = favIds.toHashSet()
-                    if (entity == null) {
-                        AppResult.Error(AppError.Http(code = 404))
-                    } else {
-                        AppResult.Success(
-                            entity.toDomainDetail(isFavorite = favSet.contains(movieId))
-                        )
-                    }
-                }
-                .collect { send(it) }
+    override suspend fun movieDetailCacheState(movieId: Long): MovieDetailCacheState =
+        withContext(Dispatchers.IO) {
+            val entity =
+                movieDao.getMovie(movieId) ?: return@withContext MovieDetailCacheState.Missing
+            if (entity.detailFetchedAtEpochMillis != null) MovieDetailCacheState.Fetched
+            else MovieDetailCacheState.Partial
         }
-    }
 
     override fun catalogLastUpdatedEpochMillis(): Flow<Long?> =
         cacheMetadataDao.observeLastUpdated(CacheKeys.CATALOG_LAST_UPDATED)
@@ -145,7 +134,10 @@ constructor(
     override suspend fun hasCatalogCache(): Boolean =
         withContext(Dispatchers.IO) { movieDao.countCatalogMovies() > 0 }
 
-    private fun MovieDetail.toEntity(popularRank: Int): MovieEntity =
+    private fun MovieDetail.toEntity(
+        popularRank: Int,
+        detailFetchedAtEpochMillis: Long?,
+    ): MovieEntity =
         MovieEntity(
             id = id,
             title = title,
@@ -156,5 +148,6 @@ constructor(
             runtimeMinutes = runtimeMinutes,
             genres = genres,
             popularRank = popularRank,
+            detailFetchedAtEpochMillis = detailFetchedAtEpochMillis,
         )
 }

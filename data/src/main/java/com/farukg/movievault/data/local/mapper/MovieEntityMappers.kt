@@ -25,6 +25,7 @@ internal fun MovieEntity.toDomainDetail(isFavorite: Boolean): MovieDetail =
         runtimeMinutes = runtimeMinutes,
         posterUrl = posterUrl,
         isFavorite = isFavorite,
+        detailFetchedAtEpochMillis = detailFetchedAtEpochMillis,
     )
 
 internal fun MovieEntity.hasDetailFields(): Boolean =
