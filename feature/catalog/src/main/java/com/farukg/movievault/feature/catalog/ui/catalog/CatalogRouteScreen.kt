@@ -1,6 +1,6 @@
 package com.farukg.movievault.feature.catalog.ui.catalog
 
-import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -45,15 +45,15 @@ fun CatalogRouteScreen(
     val savedScroll by viewModel.scrollPosition.collectAsStateWithLifecycle()
     val initialScroll = remember { savedScroll }
 
-    val listState: LazyListState = remember {
-        LazyListState(
+    val gridState: LazyGridState = remember {
+        LazyGridState(
             firstVisibleItemIndex = initialScroll.index,
             firstVisibleItemScrollOffset = initialScroll.offset,
         )
     }
 
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+    LaunchedEffect(gridState) {
+        snapshotFlow { gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset }
             .distinctUntilChanged()
             .collectLatest { (index, offset) -> viewModel.onScrollPositionChanged(index, offset) }
     }
@@ -62,7 +62,7 @@ fun CatalogRouteScreen(
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                val nearTop = listState.firstVisibleItemIndex <= 8
+                val nearTop = gridState.firstVisibleItemIndex <= 8
                 viewModel.onResumed(canAutoRefresh = nearTop)
             }
         }
@@ -85,14 +85,16 @@ fun CatalogRouteScreen(
     }
 
     suspend fun scrollToTopSmart() {
-        if (listState.firstVisibleItemIndex > 20) {
-            listState.scrollToItem(0)
+        if (gridState.firstVisibleItemIndex > 12) {
+            gridState.scrollToItem(0)
         } else {
-            listState.animateScrollToItem(0)
+            gridState.animateScrollToItem(0)
         }
     }
+
     var pendingScrollOrigin by remember { mutableStateOf<RefreshOrigin?>(null) }
     var sawLoadingForPending by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
         viewModel.refreshRequests.collectLatest { origin ->
             pendingScrollOrigin = origin
@@ -122,7 +124,7 @@ fun CatalogRouteScreen(
                             val shouldScroll =
                                 when (pending) {
                                     RefreshOrigin.Manual -> true
-                                    RefreshOrigin.Automatic -> listState.firstVisibleItemIndex <= 8
+                                    RefreshOrigin.Automatic -> gridState.firstVisibleItemIndex <= 8
                                 }
                             if (shouldScroll) scrollToTopSmart()
                         }
@@ -138,7 +140,7 @@ fun CatalogRouteScreen(
 
     CatalogScreen(
         movies = movies,
-        listState = listState,
+        gridState = gridState,
         statusUi = statusUi,
         refreshEvents = viewModel.refreshEvents,
         isManualRefreshing = manualRefreshing,
