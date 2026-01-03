@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -25,17 +26,18 @@ fun MoviePoster(
     contentDescription: String?,
     modifier: Modifier,
     cornerRadius: Dp = 12.dp,
+    shape: Shape? = null,
 ) {
     val primary = posterUrl?.trim().takeUnless { it.isNullOrBlank() }
     val fallback = fallbackPosterUrl?.trim().takeUnless { it.isNullOrBlank() }
 
-    val shape = remember(cornerRadius) { RoundedCornerShape(cornerRadius) }
+    val clipShape = remember(cornerRadius, shape) { shape ?: RoundedCornerShape(cornerRadius) }
 
     var activeUrl by remember(primary, fallback) { mutableStateOf(primary) }
     var isError by remember(primary, fallback) { mutableStateOf(false) }
 
     Box(
-        modifier = modifier.clip(shape).background(MaterialTheme.colorScheme.surfaceVariant),
+        modifier = modifier.clip(clipShape).background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
         if (activeUrl != null) {
