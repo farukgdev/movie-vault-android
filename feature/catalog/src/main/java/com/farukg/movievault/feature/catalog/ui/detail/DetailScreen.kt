@@ -37,6 +37,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +57,8 @@ import com.farukg.movievault.core.ui.components.MovieVaultCard
 import com.farukg.movievault.core.ui.components.RatingPill
 import com.farukg.movievault.core.ui.components.TagPill
 import com.farukg.movievault.feature.catalog.ui.components.detailPosterHeightDp
+
+private const val DETAIL_SKELETON_SHOW_DELAY_MS = 180L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,7 +84,11 @@ fun DetailScreen(
             is DetailUiState.Loading -> true
             is DetailUiState.NoCacheError -> true
         }
-
+    val showFullSkeleton =
+        rememberDelayedTrue(
+            target = uiState is DetailUiState.Loading,
+            delayMs = DETAIL_SKELETON_SHOW_DELAY_MS,
+        )
     Box(
         modifier =
             modifier
@@ -102,7 +109,11 @@ fun DetailScreen(
 
             when (uiState) {
                 is DetailUiState.Loading -> {
-                    DetailSkeleton(modifier = bodyModifier, titleHint = titleHint)
+                    if (showFullSkeleton) {
+                        DetailSkeleton(modifier = bodyModifier, titleHint = titleHint)
+                    } else {
+                        Box(modifier = bodyModifier)
+                    }
                 }
 
                 is DetailUiState.NoCacheError -> {
@@ -325,6 +336,20 @@ private fun DetailHeaderMeta(
             uiState.rating?.let { RatingPill(rating = it) }
         }
     }
+}
+
+@Composable
+private fun rememberDelayedTrue(target: Boolean, delayMs: Long): Boolean {
+    var value by remember { mutableStateOf(false) }
+    LaunchedEffect(target) {
+        if (!target) {
+            value = false
+        } else {
+            kotlinx.coroutines.delay(delayMs)
+            value = true
+        }
+    }
+    return value
 }
 
 // ------------- Skeletons -------------
