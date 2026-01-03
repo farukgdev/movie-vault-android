@@ -2,6 +2,8 @@ package com.farukg.movievault.data.remote.tmdb
 
 enum class TmdbImageSize(val segment: String) {
     List("w342"),
+    Grid("w500"),
+    GridLarge("w780"),
     Detail("w500"),
 }
 

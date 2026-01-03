@@ -54,13 +54,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
@@ -76,6 +76,8 @@ import com.farukg.movievault.core.ui.components.MetaPill
 import com.farukg.movievault.core.ui.components.MoviePoster
 import com.farukg.movievault.core.ui.components.MovieVaultCard
 import com.farukg.movievault.core.ui.components.RatingPill
+import com.farukg.movievault.data.remote.tmdb.TmdbImageSize
+import com.farukg.movievault.data.remote.tmdb.tmdbWithSizeOrNull
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
@@ -191,6 +193,7 @@ fun CatalogScreen(
 
                         val containerPadding =
                             PaddingValues(start = layout.sideGutter, end = layout.sideGutter)
+                        val posterSize = rememberGridPosterSize(layout.cellWidthDp)
 
                         if (!hasItemsNow) {
                             CatalogSkeletonGrid(
@@ -204,6 +207,7 @@ fun CatalogScreen(
                                 movies = movies,
                                 append = append,
                                 gridState = gridState,
+                                posterSize = posterSize,
                                 onOpenDetail = onOpenDetail,
                             )
                         }
@@ -224,7 +228,7 @@ fun CatalogScreen(
     }
 }
 
-private data class CatalogGridLayout(val columns: Int, val sideGutter: Dp)
+private data class CatalogGridLayout(val columns: Int, val sideGutter: Dp, val cellWidthDp: Dp)
 
 @Composable
 private fun rememberCatalogGridLayout(
@@ -241,10 +245,11 @@ private fun rememberCatalogGridLayout(
     val contentWidthPx = with(density) { contentWidth.toPx() }
     val heightPx = with(density) { maxHeight.toPx() }
     val spacingPx = with(density) { CatalogGridSpacing.toPx() }
+    val layoutDir = LocalLayoutDirection.current
     val hPadPx =
         with(density) {
-            (CatalogGridContentPadding.calculateLeftPadding(LayoutDirection.Ltr) +
-                    CatalogGridContentPadding.calculateRightPadding(LayoutDirection.Ltr))
+            (CatalogGridContentPadding.calculateLeftPadding(layoutDir) +
+                    CatalogGridContentPadding.calculateRightPadding(layoutDir))
                 .toPx()
         }
 
@@ -293,9 +298,22 @@ private fun rememberCatalogGridLayout(
             break
         }
     }
+    val cellWidthPx = (availableWidthPx - spacingPx * (chosen - 1)) / chosen.toFloat()
+    val cellWidthDp = with(density) { cellWidthPx.toDp() }
 
-    return remember(maxWidth, maxHeight, titleStyle, sideGutter, chosen) {
-        CatalogGridLayout(columns = chosen, sideGutter = sideGutter)
+    return CatalogGridLayout(columns = chosen, sideGutter = sideGutter, cellWidthDp = cellWidthDp)
+}
+
+@Composable
+private fun rememberGridPosterSize(cellWidthDp: Dp): TmdbImageSize {
+    val density = LocalDensity.current
+    return remember(cellWidthDp, density.density) {
+        val neededPx = with(density) { cellWidthDp.toPx() } * 1.15f
+        when {
+            neededPx <= 342f -> TmdbImageSize.List
+            neededPx <= 500f -> TmdbImageSize.Grid
+            else -> TmdbImageSize.GridLarge
+        }
     }
 }
 
@@ -335,6 +353,7 @@ private fun CatalogGrid(
     movies: LazyPagingItems<MovieRowUi>,
     append: LoadState,
     gridState: LazyGridState,
+    posterSize: TmdbImageSize,
     onOpenDetail: (movieId: Long, title: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -373,7 +392,7 @@ private fun CatalogGrid(
                     title = row.title,
                     releaseYear = row.releaseYear,
                     rating = row.rating,
-                    posterUrl = row.posterUrl,
+                    posterUrl = row.posterUrl.tmdbWithSizeOrNull(posterSize),
                     onClick = { onOpenDetail(row.id, row.title) },
                 )
             }
