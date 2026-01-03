@@ -3,9 +3,9 @@ package com.farukg.movievault.feature.catalog.ui.detail
 import com.farukg.movievault.core.error.AppError
 
 sealed interface DetailUiState {
-    data object Loading : DetailUiState
+    data class Loading(val isRefreshing: Boolean = false) : DetailUiState
 
-    data class Error(val error: AppError) : DetailUiState
+    data class NoCacheError(val error: AppError) : DetailUiState
 
     data class Content(
         val title: String,
@@ -17,5 +17,10 @@ sealed interface DetailUiState {
         val posterUrl: String?,
         val posterFallbackUrl: String?,
         val isFavorite: Boolean,
+        // behavior flags
+        val hasFetchedDetail: Boolean,
+        val isRefreshing: Boolean,
+        val bannerError: AppError?,
+        val hasAttemptedRefresh: Boolean,
     ) : DetailUiState
 }

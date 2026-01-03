@@ -8,8 +8,10 @@ import com.farukg.movievault.data.model.Movie
 import com.farukg.movievault.data.model.MovieDetail
 import com.farukg.movievault.data.repository.CatalogRepository
 import com.farukg.movievault.data.repository.FavoritesRepository
+import com.farukg.movievault.data.repository.MovieDetailCacheState
 import com.farukg.movievault.feature.catalog.testing.MainDispatcherRule
 import java.util.Locale
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -42,26 +44,30 @@ class DetailViewModelTest {
     fun `uiState stays Loading until movieId is set`() =
         runTest(mainDispatcherRule.dispatcher) {
             val catalogRepo =
-                TestCatalogRepository(initial = AppResult.Success(sampleDetail(isFavorite = false)))
+                TestCatalogRepository(
+                    initialDetail = AppResult.Success(sampleDetail(isFavorite = false)),
+                    cacheState = MovieDetailCacheState.Fetched,
+                )
             val favoritesRepo = TestFavoritesRepository()
             val vm = DetailViewModel(catalogRepo, favoritesRepo)
 
             vm.uiState.test {
-                assertEquals(DetailUiState.Loading, awaitItem())
+                assertEquals(DetailUiState.Loading(isRefreshing = false), awaitItem())
                 expectNoEvents() // no id -> no upstream -> no further emissions
                 cancelAndIgnoreRemainingEvents()
             }
 
             assertEquals(0, catalogRepo.movieDetailCalls)
+            assertEquals(0, catalogRepo.cacheStateCalls)
+            assertEquals(0, catalogRepo.refreshCalls)
         }
 
     @Test
-    fun `setMovieId triggers detail fetch and maps Success to Content`() =
+    fun `setMovieId triggers detail observe and maps Success to Content`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val scheduler = testScheduler
             val catalogRepo =
                 TestCatalogRepository(
-                    initial =
+                    initialDetail =
                         AppResult.Success(
                             sampleDetail(
                                 title = "Movie A",
@@ -69,20 +75,22 @@ class DetailViewModelTest {
                                 releaseYear = 2024,
                                 rating = 8.1,
                                 runtimeMinutes = 120,
-                                overview = "", // should fallback
+                                overview = "",
                                 isFavorite = true,
+                                detailFetchedAtEpochMillis = 123L,
                             )
-                        )
+                        ),
+                    cacheState = MovieDetailCacheState.Fetched,
+                    refreshResult = AppResult.Success(Unit),
                 )
             val favoritesRepo = TestFavoritesRepository()
             val vm = DetailViewModel(catalogRepo, favoritesRepo)
 
             vm.uiState.test {
-                // Initially loading (id not set)
-                assertEquals(DetailUiState.Loading, awaitItem())
+                assertEquals(DetailUiState.Loading(isRefreshing = false), awaitItem())
 
                 vm.setMovieId(10)
-                scheduler.runCurrent()
+                testScheduler.advanceUntilIdle()
 
                 val state = awaitItem()
                 assertTrue(state is DetailUiState.Content)
@@ -90,15 +98,18 @@ class DetailViewModelTest {
                 assertEquals(
                     DetailUiState.Content(
                         title = "Movie A",
-                        genres =
-                            listOf("Action", "Drama", "Comedy"), // take(4) in VM, so all 3 survive
+                        genres = listOf("Action", "Drama", "Comedy"),
                         releaseYear = 2024,
                         rating = 8.1,
                         runtimeMinutes = 120,
-                        overview = "No overview available.", // fallback
+                        overview = "",
                         posterUrl = null,
                         posterFallbackUrl = null,
                         isFavorite = true,
+                        hasFetchedDetail = true,
+                        isRefreshing = false,
+                        bannerError = null,
+                        hasAttemptedRefresh = false,
                     ),
                     state,
                 )
@@ -108,41 +119,61 @@ class DetailViewModelTest {
 
             assertEquals(1, catalogRepo.movieDetailCalls)
             assertEquals(10L, catalogRepo.lastRequestedId)
+            assertEquals(1, catalogRepo.cacheStateCalls)
+            assertEquals(0, catalogRepo.refreshCalls) // no auto-refresh when cache is Fetched
         }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun `maps Error to Error uiState`() =
+    fun `maps Error to NoCacheError when cache state is Missing and refresh fails`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val scheduler = testScheduler
-            val err = AppError.Network()
-            val catalogRepo = TestCatalogRepository(initial = AppResult.Error(err))
+            val flowErr = AppError.Network()
+            val refreshErr = AppError.Offline()
+
+            val catalogRepo =
+                TestCatalogRepository(
+                    initialDetail = AppResult.Error(flowErr),
+                    cacheState = MovieDetailCacheState.Missing,
+                    refreshResult = AppResult.Error(refreshErr),
+                )
             val favoritesRepo = TestFavoritesRepository()
             val vm = DetailViewModel(catalogRepo, favoritesRepo)
 
             vm.uiState.test {
-                assertEquals(DetailUiState.Loading, awaitItem())
+                assertEquals(DetailUiState.Loading(isRefreshing = false), awaitItem())
 
                 vm.setMovieId(1)
-                scheduler.runCurrent()
+                testScheduler.runCurrent()
+
+                assertEquals(DetailUiState.Loading(isRefreshing = true), awaitItem())
+
+                testScheduler.advanceTimeBy(MIN_REFRESH_VISIBLE_MS)
+                testScheduler.advanceUntilIdle()
 
                 val state = awaitItem()
-                assertEquals(DetailUiState.Error(err), state)
+                assertEquals(DetailUiState.NoCacheError(error = refreshErr), state)
 
                 cancelAndIgnoreRemainingEvents()
             }
+
+            assertEquals(1, catalogRepo.movieDetailCalls)
+            assertEquals(1, catalogRepo.cacheStateCalls)
+            assertEquals(1, catalogRepo.refreshCalls)
         }
 
     @Test
     fun `toggleFavorite does nothing before movieId is set`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val scheduler = testScheduler
             val catalogRepo =
-                TestCatalogRepository(initial = AppResult.Success(sampleDetail(isFavorite = false)))
+                TestCatalogRepository(
+                    initialDetail = AppResult.Success(sampleDetail(isFavorite = false)),
+                    cacheState = MovieDetailCacheState.Fetched,
+                )
             val favoritesRepo = TestFavoritesRepository()
             val vm = DetailViewModel(catalogRepo, favoritesRepo)
 
             vm.toggleFavorite()
-            scheduler.advanceUntilIdle()
+            testScheduler.advanceUntilIdle()
 
             assertEquals(emptyList<Long>(), favoritesRepo.toggledIds)
         }
@@ -150,17 +181,19 @@ class DetailViewModelTest {
     @Test
     fun `toggleFavorite calls repository with current movieId`() =
         runTest(mainDispatcherRule.dispatcher) {
-            val scheduler = testScheduler
             val catalogRepo =
-                TestCatalogRepository(initial = AppResult.Success(sampleDetail(isFavorite = false)))
+                TestCatalogRepository(
+                    initialDetail = AppResult.Success(sampleDetail(isFavorite = false)),
+                    cacheState = MovieDetailCacheState.Fetched,
+                )
             val favoritesRepo = TestFavoritesRepository()
             val vm = DetailViewModel(catalogRepo, favoritesRepo)
 
             vm.setMovieId(42)
-            scheduler.runCurrent()
+            testScheduler.advanceUntilIdle()
 
             vm.toggleFavorite()
-            scheduler.advanceUntilIdle()
+            testScheduler.advanceUntilIdle()
 
             assertEquals(listOf(42L), favoritesRepo.toggledIds)
         }
@@ -176,6 +209,7 @@ class DetailViewModelTest {
         overview: String = "Overview",
         posterUrl: String? = null,
         isFavorite: Boolean = false,
+        detailFetchedAtEpochMillis: Long? = null,
     ): MovieDetail =
         MovieDetail(
             id = 1L,
@@ -187,12 +221,24 @@ class DetailViewModelTest {
             runtimeMinutes = runtimeMinutes,
             posterUrl = posterUrl,
             isFavorite = isFavorite,
+            detailFetchedAtEpochMillis = detailFetchedAtEpochMillis,
         )
 
-    private class TestCatalogRepository(initial: AppResult<MovieDetail>) : CatalogRepository {
-        private val detailFlow = MutableStateFlow(initial)
+    private class TestCatalogRepository(
+        initialDetail: AppResult<MovieDetail>,
+        private val cacheState: MovieDetailCacheState,
+        private val refreshResult: AppResult<Unit> = AppResult.Success(Unit),
+    ) : CatalogRepository {
+
+        private val detailFlow = MutableStateFlow(initialDetail)
 
         var movieDetailCalls: Int = 0
+            private set
+
+        var cacheStateCalls: Int = 0
+            private set
+
+        var refreshCalls: Int = 0
             private set
 
         var lastRequestedId: Long? = null
@@ -206,6 +252,16 @@ class DetailViewModelTest {
             return detailFlow
         }
 
+        override suspend fun refreshMovieDetail(movieId: Long): AppResult<Unit> {
+            refreshCalls++
+            return refreshResult
+        }
+
+        override suspend fun movieDetailCacheState(movieId: Long): MovieDetailCacheState {
+            cacheStateCalls++
+            return cacheState
+        }
+
         override fun catalogLastUpdatedEpochMillis(): Flow<Long?> = flowOf(null)
 
         override suspend fun isCatalogStale(nowEpochMillis: Long): Boolean = false
@@ -215,7 +271,6 @@ class DetailViewModelTest {
 
     private class TestFavoritesRepository : FavoritesRepository {
         val toggledIds = mutableListOf<Long>()
-        val toggleResults = mutableListOf<Boolean>()
         private val favoriteState = mutableMapOf<Long, Boolean>()
 
         override fun favorites() = flowOf(AppResult.Success(emptyList<Movie>()))
@@ -224,7 +279,6 @@ class DetailViewModelTest {
             toggledIds += movieId
             val newValue = !(favoriteState[movieId] ?: false)
             favoriteState[movieId] = newValue
-            toggleResults += newValue
             return AppResult.Success(newValue)
         }
     }
