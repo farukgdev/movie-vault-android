@@ -39,7 +39,8 @@ fun DetailRouteScreen(route: DetailRoute, onBack: () -> Unit, modifier: Modifier
 
     DetailScreen(
         uiState = uiState,
-        onRetry = viewModel::retry,
+        titleHint = route.initialTitle,
+        onRefresh = viewModel::refresh,
         scrollState = scrollState,
         modifier = modifier,
     )
