@@ -15,11 +15,11 @@ permissions:
 
 env:
   JAVA_VERSION: "17"
-  GRADLE_ARGS: "--stacktrace"
+  GRADLE_ARGS: "--stacktrace --no-daemon"
   ANDROID_API: "34"
   COMPILE_SDK: "36"
   BUILD_TOOLS: "36.0.0"
-
+  UI_TIMEOUT_MS: "30000"
 jobs:
   unit:
     name: Build + unit tests
@@ -111,7 +111,7 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew :app:connectedDebugAndroidTest ${{ env.GRADLE_ARGS }}
+          script: ./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.uiTimeoutMs=${{ env.UI_TIMEOUT_MS }} ${{ env.GRADLE_ARGS }}
 
       - name: Upload androidTest reports + logs
         if: always()
