@@ -1,10 +1,13 @@
 package com.farukg.movievault.feature.catalog.ui.catalog.topbar
 
 import android.R.attr.onClick
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.SyncProblem
 import androidx.compose.material3.CircularProgressIndicator
@@ -17,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -33,9 +37,22 @@ fun CatalogTopAppBar(
     statusUi: CatalogStatusUi,
     onOpenStatus: () -> Unit,
     onOpenFavorites: () -> Unit,
+    onOpenAbout: () -> Unit,
 ) {
     TopAppBar(
-        title = { Text(text = "MovieVault", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(text = "MovieVault", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                IconButton(onClick = onOpenAbout, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = "About",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
         actions = {
             StatusActionButton(
                 statusUi = statusUi,

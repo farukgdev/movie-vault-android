@@ -35,7 +35,11 @@ fun CatalogStatusSheetContent(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .testTag(TestTags.CATALOG_STATUS_SHEET_CONTENT),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         val hasProblem = statusUi.error != null

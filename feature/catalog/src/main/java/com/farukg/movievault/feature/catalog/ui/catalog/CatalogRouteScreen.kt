@@ -27,11 +27,17 @@ import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.ui.scaffold.RegisterTopBar
 import com.farukg.movievault.core.ui.testing.TestTags
 import com.farukg.movievault.feature.catalog.navigation.CatalogRoute
+import com.farukg.movievault.feature.catalog.ui.about.AboutCreditsSheetContent
 import com.farukg.movievault.feature.catalog.ui.catalog.topbar.CatalogStatusSheetContent
 import com.farukg.movievault.feature.catalog.ui.catalog.topbar.CatalogTopAppBar
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+
+private enum class CatalogSheet {
+    Status,
+    About,
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,17 +78,24 @@ fun CatalogRouteScreen(
         onDispose { lifecycle.removeObserver(observer) }
     }
 
-    var showStatusSheet by remember { mutableStateOf(false) }
+    val statusUi by viewModel.statusUi.collectAsStateWithLifecycle()
+
+    var activeSheet by remember { mutableStateOf<CatalogSheet?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
 
-    val statusUi by viewModel.statusUi.collectAsStateWithLifecycle()
-
+    fun closeSheet() {
+        scope.launch {
+            sheetState.hide()
+            activeSheet = null
+        }
+    }
     RegisterTopBar(CatalogRoute) {
         CatalogTopAppBar(
             statusUi = statusUi,
-            onOpenStatus = { showStatusSheet = true },
+            onOpenStatus = { activeSheet = CatalogSheet.Status },
             onOpenFavorites = onOpenFavorites,
+            onOpenAbout = { activeSheet = CatalogSheet.About },
         )
     }
 
@@ -154,33 +167,30 @@ fun CatalogRouteScreen(
         modifier = modifier,
     )
 
-    if (showStatusSheet) {
+    if (activeSheet != null) {
         ModalBottomSheet(
-            onDismissRequest = {
-                scope.launch {
-                    sheetState.hide()
-                    showStatusSheet = false
-                }
-            },
+            onDismissRequest = { closeSheet() },
             sheetState = sheetState,
-            modifier = Modifier.testTag(TestTags.STATUS_SHEET),
+            modifier = Modifier.testTag(TestTags.CATALOG_SHEET),
         ) {
-            CatalogStatusSheetContent(
-                statusUi = statusUi,
-                onRefreshNow = {
-                    viewModel.requestManualRefresh()
-                    scope.launch {
-                        sheetState.hide()
-                        showStatusSheet = false
-                    }
-                },
-                onDismiss = {
-                    scope.launch {
-                        sheetState.hide()
-                        showStatusSheet = false
-                    }
-                },
-            )
+            when (activeSheet) {
+                CatalogSheet.Status -> {
+                    CatalogStatusSheetContent(
+                        statusUi = statusUi,
+                        onRefreshNow = {
+                            viewModel.requestManualRefresh()
+                            closeSheet()
+                        },
+                        onDismiss = { closeSheet() },
+                    )
+                }
+
+                CatalogSheet.About -> {
+                    AboutCreditsSheetContent(onClose = { closeSheet() })
+                }
+
+                null -> Unit
+            }
         }
     }
 }

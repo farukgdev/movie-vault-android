@@ -72,7 +72,7 @@ class CatalogSmokeTest : SmokeTestBase() {
         composeRule.onNodeWithContentDescription("Status: offline").assertDoesNotExist()
 
         composeRule.onNodeWithTag(TestTags.STATUS_BUTTON).performClick()
-        composeRule.waitUntilTagExists(TestTags.STATUS_SHEET)
+        composeRule.waitUntilTagExists(TestTags.CATALOG_STATUS_SHEET_CONTENT)
         composeRule.onNodeWithTag(TestTags.STATUS_SHEET_REFRESH).performClick()
 
         composeRule.waitUntilExists(hasContentDescription("Status: offline"))
@@ -119,7 +119,7 @@ class CatalogSmokeTest : SmokeTestBase() {
         composeRule.waitUntilTagExists(item1Tag)
 
         composeRule.onNodeWithTag(TestTags.STATUS_BUTTON).performClick()
-        composeRule.waitUntilTagExists(TestTags.STATUS_SHEET)
+        composeRule.waitUntilTagExists(TestTags.CATALOG_STATUS_SHEET_CONTENT)
         composeRule.onNodeWithTag(TestTags.STATUS_SHEET_REFRESH).performClick()
 
         composeRule.waitUntilTagExists(TestTags.CATALOG_SNACKBAR_HOST)
