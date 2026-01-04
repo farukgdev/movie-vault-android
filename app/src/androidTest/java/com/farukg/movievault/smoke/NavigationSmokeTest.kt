@@ -1,8 +1,7 @@
 package com.farukg.movievault.smoke
 
-import androidx.compose.ui.test.click
+import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -37,13 +36,7 @@ class NavigationSmokeTest : SmokeTestBase() {
         val item1Tag = TestTags.CATALOG_ITEM + 1L
         composeRule.waitUntilTagExists(item1Tag)
 
-        val center = composeRule.onNodeWithTag(item1Tag).fetchSemanticsNode().boundsInRoot.center
-
-        composeRule.onRoot().performTouchInput {
-            click(center)
-            advanceEventTime(30)
-            click(center)
-        }
+        composeRule.onNodeWithTag(item1Tag).performTouchInput { doubleClick() }
 
         composeRule.waitUntilTagExists(TestTags.DETAIL_SCREEN)
         composeRule.onNodeWithTag(TestTags.DETAIL_BACK_BUTTON).performClick()

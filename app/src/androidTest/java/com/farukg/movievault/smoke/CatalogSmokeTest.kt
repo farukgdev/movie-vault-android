@@ -19,6 +19,7 @@ import com.farukg.movievault.testing.moviesPage
 import com.farukg.movievault.testing.seedCatalogEntities
 import com.farukg.movievault.testing.waitUntilExists
 import com.farukg.movievault.testing.waitUntilTagExists
+import com.farukg.movievault.testing.waitUntilTagGone
 import dagger.hilt.android.testing.HiltAndroidTest
 import dagger.hilt.android.testing.UninstallModules
 import kotlinx.coroutines.runBlocking
@@ -41,7 +42,9 @@ class CatalogSmokeTest : SmokeTestBase() {
         launchApp()
 
         composeRule.waitUntilTagExists(TestTags.FULLSCREEN_ERROR)
-        composeRule.onNodeWithTag(TestTags.CATALOG_FULLSCREEN_RETRY).performClick()
+        composeRule.onNodeWithTag(TestTags.CATALOG_FULLSCREEN_RETRY).assertExists().performClick()
+        composeRule.waitUntilTagGone(TestTags.FULLSCREEN_ERROR)
+        composeRule.waitUntilTagExists(TestTags.CATALOG_SCREEN)
 
         val item1Tag = TestTags.CATALOG_ITEM + 1L
         composeRule.waitUntilTagExists(item1Tag)
