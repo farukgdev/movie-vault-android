@@ -20,7 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Favorite
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.farukg.movievault.core.error.userMessage
@@ -39,6 +40,7 @@ import com.farukg.movievault.core.ui.components.MetaPill
 import com.farukg.movievault.core.ui.components.MoviePoster
 import com.farukg.movievault.core.ui.components.MovieVaultCard
 import com.farukg.movievault.core.ui.components.RatingPill
+import com.farukg.movievault.core.ui.testing.TestTags
 
 @Composable
 fun FavoritesScreen(
@@ -49,7 +51,8 @@ fun FavoritesScreen(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxSize().padding(horizontal = 16.dp),
+        modifier =
+            modifier.fillMaxSize().testTag(TestTags.FAVORITES_SCREEN).padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         val bodyModifier = Modifier.weight(1f).fillMaxWidth()
@@ -73,7 +76,7 @@ fun FavoritesScreen(
 
             is FavoritesUiState.Content -> {
                 LazyColumn(
-                    modifier = bodyModifier.fillMaxSize(),
+                    modifier = bodyModifier.fillMaxSize().testTag(TestTags.FAVORITES_LIST),
                     contentPadding =
                         PaddingValues(start = 0.dp, top = 6.dp, end = 0.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -98,7 +101,10 @@ private fun FavoriteRow(
     onUnfavorite: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    MovieVaultCard(onClick = onOpenDetail, modifier = modifier.fillMaxWidth()) {
+    MovieVaultCard(
+        onClick = onOpenDetail,
+        modifier = modifier.fillMaxWidth().testTag(TestTags.FAVORITE_ITEM + movie.id),
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -137,10 +143,12 @@ private fun FavoriteRow(
 
             IconButton(
                 onClick = onUnfavorite,
-                modifier = Modifier.minimumInteractiveComponentSize(),
+                modifier =
+                    Modifier.minimumInteractiveComponentSize()
+                        .testTag(TestTags.FAVORITE_REMOVE + movie.id),
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Favorite,
+                    imageVector = Icons.Filled.Favorite,
                     contentDescription = "Remove from favorites",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

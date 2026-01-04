@@ -10,16 +10,21 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.farukg.movievault.core.ui.components.MetaPill
+import com.farukg.movievault.core.ui.testing.TestTags
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoritesTopAppBar(onBack: () -> Unit, savedCount: Int?) {
     TopAppBar(
         navigationIcon = {
-            IconButton(onClick = onBack) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.testTag(TestTags.FAVORITES_BACK_BUTTON),
+            ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                     contentDescription = "Back",

@@ -16,9 +16,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.farukg.movievault.core.error.userMessage
+import com.farukg.movievault.core.ui.testing.TestTags
 import com.farukg.movievault.feature.catalog.ui.catalog.CatalogStatusIcon
 import com.farukg.movievault.feature.catalog.ui.catalog.CatalogStatusUi
 import com.farukg.movievault.feature.catalog.ui.catalog.RefreshOrigin
@@ -75,7 +77,12 @@ fun CatalogStatusSheetContent(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = onDismiss) { Text("Close") }
-            TextButton(onClick = onRefreshNow) { Text(primaryActionLabel) }
+            TextButton(
+                onClick = onRefreshNow,
+                modifier = Modifier.testTag(TestTags.STATUS_SHEET_REFRESH),
+            ) {
+                Text(primaryActionLabel)
+            }
         }
 
         Spacer(Modifier.height(6.dp))
