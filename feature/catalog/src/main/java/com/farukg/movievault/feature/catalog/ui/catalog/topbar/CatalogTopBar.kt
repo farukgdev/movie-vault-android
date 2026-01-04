@@ -1,5 +1,6 @@
 package com.farukg.movievault.feature.catalog.ui.catalog.topbar
 
+import android.R.attr.onClick
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.CloudOff
@@ -17,10 +18,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.farukg.movievault.core.ui.testing.TestTags
 import com.farukg.movievault.feature.catalog.ui.catalog.CatalogStatusIcon
 import com.farukg.movievault.feature.catalog.ui.catalog.CatalogStatusUi
 
@@ -34,8 +37,15 @@ fun CatalogTopAppBar(
     TopAppBar(
         title = { Text(text = "MovieVault", maxLines = 1, overflow = TextOverflow.Ellipsis) },
         actions = {
-            StatusActionButton(statusUi = statusUi, onClick = onOpenStatus)
-            IconButton(onClick = onOpenFavorites) {
+            StatusActionButton(
+                statusUi = statusUi,
+                onClick = onOpenStatus,
+                modifier = Modifier.testTag(TestTags.STATUS_BUTTON),
+            )
+            IconButton(
+                onClick = onOpenFavorites,
+                modifier = Modifier.testTag(TestTags.CATALOG_TOPBAR_FAVORITES_BUTTON),
+            ) {
                 Icon(Icons.Outlined.FavoriteBorder, contentDescription = "Favorites")
             }
         },

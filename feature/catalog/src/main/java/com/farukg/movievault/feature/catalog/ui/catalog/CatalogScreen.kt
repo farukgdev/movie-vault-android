@@ -55,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -76,6 +77,7 @@ import com.farukg.movievault.core.ui.components.MetaPill
 import com.farukg.movievault.core.ui.components.MoviePoster
 import com.farukg.movievault.core.ui.components.MovieVaultCard
 import com.farukg.movievault.core.ui.components.RatingPill
+import com.farukg.movievault.core.ui.testing.TestTags
 import com.farukg.movievault.data.remote.tmdb.TmdbImageSize
 import com.farukg.movievault.data.remote.tmdb.tmdbWithSizeOrNull
 import kotlin.math.floor
@@ -149,7 +151,7 @@ fun CatalogScreen(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize().testTag(TestTags.CATALOG_SCREEN)) {
         PullToRefreshBox(
             modifier = Modifier.fillMaxSize(),
             isRefreshing = manualRefreshingUi,
@@ -169,6 +171,7 @@ fun CatalogScreen(
                         modifier = Modifier.fillMaxSize(),
                         message = fullScreenError.userMessage(),
                         onRetry = onRetryInitialLoad,
+                        retryButtonTestTag = TestTags.CATALOG_FULLSCREEN_RETRY,
                     )
                 }
 
@@ -221,7 +224,8 @@ fun CatalogScreen(
             modifier =
                 Modifier.align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .testTag(TestTags.CATALOG_SNACKBAR_HOST),
         ) { data ->
             MovieVaultSnackbar(data = data, modifier = Modifier.fillMaxWidth())
         }
@@ -374,7 +378,7 @@ private fun CatalogGrid(
     LazyVerticalGrid(
         columns = GridCells.Fixed(columns),
         state = gridState,
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().testTag(TestTags.CATALOG_GRID),
         contentPadding = CatalogGridContentPadding,
         horizontalArrangement = Arrangement.spacedBy(CatalogGridSpacing),
         verticalArrangement = Arrangement.spacedBy(CatalogGridSpacing),
@@ -394,6 +398,7 @@ private fun CatalogGrid(
                     rating = row.rating,
                     posterUrl = row.posterUrl.tmdbWithSizeOrNull(posterSize),
                     onClick = { onOpenDetail(row.id, row.title) },
+                    modifier = Modifier.testTag(TestTags.CATALOG_ITEM + row.id),
                 )
             }
         }
@@ -679,7 +684,7 @@ private fun MovieVaultSnackbar(data: SnackbarData, modifier: Modifier = Modifier
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).testTag(TestTags.CATALOG_SNACKBAR_MESSAGE),
             )
 
             data.visuals.actionLabel?.let { label ->
@@ -690,6 +695,7 @@ private fun MovieVaultSnackbar(data: SnackbarData, modifier: Modifier = Modifier
                             contentColor = MaterialTheme.colorScheme.inversePrimary
                         ),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.testTag(TestTags.CATALOG_SNACKBAR_ACTION),
                 ) {
                     Text(text = label)
                 }

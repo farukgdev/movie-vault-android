@@ -14,6 +14,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -24,6 +25,7 @@ import androidx.paging.LoadState
 import androidx.paging.compose.collectAsLazyPagingItems
 import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.ui.scaffold.RegisterTopBar
+import com.farukg.movievault.core.ui.testing.TestTags
 import com.farukg.movievault.feature.catalog.navigation.CatalogRoute
 import com.farukg.movievault.feature.catalog.ui.catalog.topbar.CatalogStatusSheetContent
 import com.farukg.movievault.feature.catalog.ui.catalog.topbar.CatalogTopAppBar
@@ -161,6 +163,7 @@ fun CatalogRouteScreen(
                 }
             },
             sheetState = sheetState,
+            modifier = Modifier.testTag(TestTags.STATUS_SHEET),
         ) {
             CatalogStatusSheetContent(
                 statusUi = statusUi,

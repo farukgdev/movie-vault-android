@@ -9,30 +9,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-
-@Composable
-fun LoadingState(modifier: Modifier = Modifier, message: String? = null) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(24.dp),
-        ) {
-            CircularProgressIndicator()
-            if (!message.isNullOrBlank()) {
-                Text(text = message, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-    }
-}
+import com.farukg.movievault.core.ui.testing.TestTags
 
 @Composable
 fun ErrorState(
@@ -41,8 +26,12 @@ fun ErrorState(
     message: String? = null,
     retryLabel: String = "Retry",
     onRetry: (() -> Unit)? = null,
+    retryButtonTestTag: String? = null,
 ) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = modifier.fillMaxSize().testTag(TestTags.FULLSCREEN_ERROR),
+        contentAlignment = Alignment.Center,
+    ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -54,7 +43,14 @@ fun ErrorState(
                 Text(text = message, style = MaterialTheme.typography.bodyMedium)
             }
             if (onRetry != null) {
-                Button(onClick = onRetry) { Text(text = retryLabel) }
+                Button(
+                    onClick = onRetry,
+                    modifier =
+                        if (retryButtonTestTag != null) Modifier.testTag(retryButtonTestTag)
+                        else Modifier,
+                ) {
+                    Text(text = retryLabel)
+                }
             }
         }
     }
@@ -68,7 +64,10 @@ fun EmptyState(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = modifier.fillMaxSize().testTag(TestTags.EMPTY_STATE),
+        contentAlignment = Alignment.Center,
+    ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),

@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -56,6 +57,7 @@ import com.farukg.movievault.core.ui.components.MoviePoster
 import com.farukg.movievault.core.ui.components.MovieVaultCard
 import com.farukg.movievault.core.ui.components.RatingPill
 import com.farukg.movievault.core.ui.components.TagPill
+import com.farukg.movievault.core.ui.testing.TestTags
 import com.farukg.movievault.feature.catalog.ui.components.detailPosterHeightDp
 
 private const val DETAIL_SKELETON_SHOW_DELAY_MS = 180L
@@ -93,6 +95,7 @@ fun DetailScreen(
         modifier =
             modifier
                 .fillMaxSize()
+                .testTag(TestTags.DETAIL_SCREEN)
                 .padding(horizontal = 16.dp)
                 .pullToRefresh(
                     isRefreshing = refreshing,
@@ -218,7 +221,8 @@ fun DetailScreen(
                                     text = uiState.overview,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(16.dp),
+                                    modifier =
+                                        Modifier.padding(16.dp).testTag(TestTags.DETAIL_OVERVIEW),
                                 )
                             }
                         } else if (showPlaceholders) {
@@ -249,7 +253,7 @@ private fun DetailErrorBanner(
     val icon = if (offline) Icons.Outlined.CloudOff else Icons.Outlined.SyncProblem
     val message = if (offline) "Offline — showing saved details" else "Couldn't update details"
 
-    MovieVaultCard(modifier = modifier) {
+    MovieVaultCard(modifier = modifier.testTag(TestTags.DETAIL_ERROR_BANNER)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -273,7 +277,13 @@ private fun DetailErrorBanner(
                 modifier = Modifier.weight(1f),
             )
 
-            TextButton(onClick = onRetry, enabled = !isRefreshing) { Text("Retry") }
+            TextButton(
+                onClick = onRetry,
+                enabled = !isRefreshing,
+                modifier = Modifier.testTag(TestTags.DETAIL_ERROR_RETRY),
+            ) {
+                Text("Retry")
+            }
         }
     }
 }
@@ -291,11 +301,12 @@ private fun DetailHeaderMeta(
             style = MaterialTheme.typography.titleLarge,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.testTag(TestTags.DETAIL_TITLE),
         )
 
         if (uiState.genres.isNotEmpty()) {
             FlowRow(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().testTag(TestTags.DETAIL_GENRES),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -329,7 +340,11 @@ private fun DetailHeaderMeta(
             uiState.releaseYear?.let { MetaPill(text = it.toString()) }
 
             when {
-                uiState.runtimeMinutes != null -> MetaPill(text = "${uiState.runtimeMinutes}m")
+                uiState.runtimeMinutes != null ->
+                    MetaPill(
+                        text = "${uiState.runtimeMinutes}m",
+                        modifier = Modifier.testTag(TestTags.DETAIL_RUNTIME),
+                    )
                 showPlaceholders -> MetaPillSkeleton(width = 54.dp)
             }
 
