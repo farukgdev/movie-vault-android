@@ -7,6 +7,7 @@ import androidx.paging.PagingData
 import androidx.paging.map
 import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.result.AppResult
+import com.farukg.movievault.core.time.Clock
 import com.farukg.movievault.data.cache.CacheKeys
 import com.farukg.movievault.data.cache.CachePolicy
 import com.farukg.movievault.data.local.dao.CacheMetadataDao
@@ -43,6 +44,7 @@ constructor(
     private val cacheMetadataDao: CacheMetadataDao,
     private val remote: CatalogRemoteDataSource,
     private val remoteKeysDao: CatalogRemoteKeysDao,
+    private val clock: Clock,
 ) : CatalogRepository {
 
     private companion object {
@@ -67,6 +69,7 @@ constructor(
                         remoteKeysDao = remoteKeysDao,
                         cacheMetadataDao = cacheMetadataDao,
                         remote = remote,
+                        clock = clock,
                     ),
                 pagingSourceFactory = { movieDao.catalogPagingSource() },
             )
@@ -104,7 +107,7 @@ constructor(
                     val merged =
                         fetched.data.toEntity(
                             popularRank = rank,
-                            detailFetchedAtEpochMillis = System.currentTimeMillis(),
+                            detailFetchedAtEpochMillis = clock.now(),
                         )
                     movieDao.upsert(merged)
                     AppResult.Success(Unit)

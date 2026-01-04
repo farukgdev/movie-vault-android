@@ -9,6 +9,7 @@ import com.farukg.movievault.data.model.MovieDetail
 import com.farukg.movievault.data.model.MoviesPage
 import com.farukg.movievault.data.remote.CatalogRemoteDataSource
 import com.farukg.movievault.data.repository.MovieDetailCacheState
+import com.farukg.movievault.data.test.TestClock
 import com.farukg.movievault.data.test.movieEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -21,6 +22,7 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class RoomCatalogRepositoryTest {
 
+    private val clock = TestClock()
     private lateinit var db: MovieVaultDatabase
     private lateinit var repo: RoomCatalogRepository
     private lateinit var remote: FakeRemote
@@ -43,6 +45,7 @@ class RoomCatalogRepositoryTest {
                 cacheMetadataDao = db.cacheMetadataDao(),
                 remote = remote,
                 remoteKeysDao = db.catalogRemoteKeysDao(),
+                clock = clock,
             )
     }
 
