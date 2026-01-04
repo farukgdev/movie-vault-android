@@ -7,6 +7,7 @@ import androidx.paging.RemoteMediator
 import androidx.room.withTransaction
 import com.farukg.movievault.core.error.AppErrorException
 import com.farukg.movievault.core.result.AppResult
+import com.farukg.movievault.core.time.Clock
 import com.farukg.movievault.data.cache.CacheKeys
 import com.farukg.movievault.data.cache.CachePolicy
 import com.farukg.movievault.data.local.dao.CacheMetadataDao
@@ -26,10 +27,11 @@ class CatalogRemoteMediator(
     private val remoteKeysDao: CatalogRemoteKeysDao,
     private val cacheMetadataDao: CacheMetadataDao,
     private val remote: CatalogRemoteDataSource,
+    private val clock: Clock,
 ) : RemoteMediator<Int, CatalogMovieRow>() {
 
     override suspend fun initialize(): InitializeAction {
-        val now = System.currentTimeMillis()
+        val now = clock.now()
         val lastUpdated =
             cacheMetadataDao.get(CacheKeys.CATALOG_LAST_UPDATED)?.lastUpdatedEpochMillis
         val hasCatalog = movieDao.countCatalogMovies() > 0
@@ -122,7 +124,7 @@ class CatalogRemoteMediator(
                         cacheMetadataDao.upsert(
                             CacheMetadataEntity(
                                 key = CacheKeys.CATALOG_LAST_UPDATED,
-                                lastUpdatedEpochMillis = System.currentTimeMillis(),
+                                lastUpdatedEpochMillis = clock.now(),
                             )
                         )
                     }

@@ -21,6 +21,7 @@ import com.farukg.movievault.data.model.MovieDetail
 import com.farukg.movievault.data.model.MoviesPage
 import com.farukg.movievault.data.remote.CatalogRemoteDataSource
 import com.farukg.movievault.data.test.MainDispatcherRule
+import com.farukg.movievault.data.test.TestClock
 import com.farukg.movievault.data.test.movieEntity
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -37,6 +38,8 @@ import org.robolectric.RobolectricTestRunner
 class CatalogRemoteMediatorTest {
 
     @get:Rule val mainDispatcherRule = MainDispatcherRule()
+
+    private val clock = TestClock()
 
     private lateinit var db: MovieVaultDatabase
     private lateinit var remote: FakeRemote
@@ -60,6 +63,7 @@ class CatalogRemoteMediatorTest {
                 remoteKeysDao = db.catalogRemoteKeysDao(),
                 cacheMetadataDao = db.cacheMetadataDao(),
                 remote = remote,
+                clock = clock,
             )
     }
 
@@ -89,7 +93,7 @@ class CatalogRemoteMediatorTest {
 
         val lastUpdated =
             db.cacheMetadataDao().get(CacheKeys.CATALOG_LAST_UPDATED)?.lastUpdatedEpochMillis
-        assertTrue(lastUpdated != null && lastUpdated > 0L)
+        assertEquals(clock.now(), lastUpdated)
 
         // pagingSource can read the newly cached page
         val page = loadCatalogPagingSource(loadSize = 50)
@@ -145,7 +149,7 @@ class CatalogRemoteMediatorTest {
             .upsert(
                 CacheMetadataEntity(
                     key = CacheKeys.CATALOG_LAST_UPDATED,
-                    lastUpdatedEpochMillis = System.currentTimeMillis(),
+                    lastUpdatedEpochMillis = clock.now(),
                 )
             )
 

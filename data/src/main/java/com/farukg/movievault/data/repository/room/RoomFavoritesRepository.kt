@@ -3,6 +3,7 @@ package com.farukg.movievault.data.repository.room
 import androidx.room.withTransaction
 import com.farukg.movievault.core.error.AppError
 import com.farukg.movievault.core.result.AppResult
+import com.farukg.movievault.core.time.Clock
 import com.farukg.movievault.data.local.dao.FavoriteDao
 import com.farukg.movievault.data.local.db.MovieVaultDatabase
 import com.farukg.movievault.data.local.entity.FavoriteEntity
@@ -19,8 +20,11 @@ import kotlinx.coroutines.flow.map
 @Singleton
 class RoomFavoritesRepository
 @Inject
-constructor(private val db: MovieVaultDatabase, private val favoriteDao: FavoriteDao) :
-    FavoritesRepository {
+constructor(
+    private val db: MovieVaultDatabase,
+    private val favoriteDao: FavoriteDao,
+    private val clock: Clock,
+) : FavoritesRepository {
 
     override fun favorites(): Flow<AppResult<List<Movie>>> =
         favoriteDao
@@ -43,7 +47,7 @@ constructor(private val db: MovieVaultDatabase, private val favoriteDao: Favorit
 
     override suspend fun toggleFavorite(movieId: Long): AppResult<Boolean> =
         try {
-            val now = System.currentTimeMillis()
+            val now = clock.now()
             val newState =
                 db.withTransaction {
                     if (favoriteDao.isFavorited(movieId)) {
