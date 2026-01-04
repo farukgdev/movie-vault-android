@@ -67,7 +67,7 @@ class ScrollBehaviorSmokeTest : SmokeTestBase() {
         composeRule.onNodeWithTag(item25Tag).assertIsDisplayed()
 
         composeRule.onNodeWithTag(TestTags.STATUS_BUTTON).performClick()
-        composeRule.waitUntilTagExists(TestTags.STATUS_SHEET)
+        composeRule.waitUntilTagExists(TestTags.CATALOG_STATUS_SHEET_CONTENT)
         composeRule.onNodeWithTag(TestTags.STATUS_SHEET_REFRESH).performClick()
 
         // No jump to top on failure

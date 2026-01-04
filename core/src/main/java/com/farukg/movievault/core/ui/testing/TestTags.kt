@@ -14,7 +14,8 @@ object TestTags {
     const val CATALOG_SNACKBAR_MESSAGE = "catalog_snackbar_message"
 
     const val STATUS_BUTTON = "catalog_status_button"
-    const val STATUS_SHEET = "catalog_status_sheet"
+    const val CATALOG_SHEET = "catalog_sheet"
+    const val CATALOG_STATUS_SHEET_CONTENT = "catalog_status_sheet_content"
     const val STATUS_SHEET_REFRESH = "catalog_status_sheet_refresh"
 
     const val DETAIL_SCREEN = "detail_screen"
