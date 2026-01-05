@@ -24,36 +24,32 @@ android {
         testInstrumentationRunner = "com.farukg.movievault.CustomTestRunner"
     }
     val signingPropsFile = rootProject.file("signing.properties")
-    val signingProps =
-        Properties().apply {
-            if (signingPropsFile.exists()) signingPropsFile.inputStream().use(::load)
-        }
+    val signingProps = Properties()
+    val hasSigningProps = signingPropsFile.exists()
+    if (hasSigningProps) signingPropsFile.inputStream().use(signingProps::load)
 
     signingConfigs {
-        create("release") {
-            if (!signingPropsFile.exists()) {
-                throw GradleException("Missing signing.properties, needed for release signing.")
+        if (hasSigningProps) {
+            create("release") {
+                storeFile = rootProject.file(signingProps.getProperty("storeFile"))
+                storePassword = signingProps.getProperty("storePassword")
+                keyAlias = signingProps.getProperty("keyAlias")
+                keyPassword = signingProps.getProperty("keyPassword")
+                enableV1Signing = true
+                enableV2Signing = true
             }
-
-            val storeFilePath = signingProps.getProperty("storeFile")
-            storeFile = file(storeFilePath)
-
-            storePassword = signingProps.getProperty("storePassword")
-            keyAlias = signingProps.getProperty("keyAlias")
-            keyPassword = signingProps.getProperty("keyPassword")
-
-            enableV1Signing = true
-            enableV2Signing = true
         }
     }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             isDebuggable = false
 
-            signingConfig = signingConfigs.getByName("release")
-
+            if (hasSigningProps) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
