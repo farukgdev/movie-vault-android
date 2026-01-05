@@ -1,5 +1,6 @@
 package com.farukg.movievault.smoke
 
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -34,15 +35,20 @@ class CatalogSmokeTest : SmokeTestBase() {
     @Test
     fun noCache_offline_showsFullscreenError_thenRetryLoadsCatalog() {
         fakeRemote.enqueuePopular(page = 1, result = AppResult.Error(AppError.Offline()))
+
+        launchApp()
+
+        composeRule.waitUntilTagExists(TestTags.FULLSCREEN_ERROR)
+        composeRule.waitUntilTagExists(TestTags.CATALOG_FULLSCREEN_RETRY)
+        composeRule.onNodeWithTag(TestTags.CATALOG_FULLSCREEN_RETRY).assertIsEnabled()
+
         fakeRemote.enqueuePopular(
             page = 1,
             result = AppResult.Success(moviesPage(page = 1, totalPages = 1, ids = 1L..20L)),
         )
 
-        launchApp()
+        composeRule.onNodeWithTag(TestTags.CATALOG_FULLSCREEN_RETRY).performClick()
 
-        composeRule.waitUntilTagExists(TestTags.FULLSCREEN_ERROR)
-        composeRule.onNodeWithTag(TestTags.CATALOG_FULLSCREEN_RETRY).assertExists().performClick()
         composeRule.waitUntilTagGone(TestTags.FULLSCREEN_ERROR)
         composeRule.waitUntilTagExists(TestTags.CATALOG_SCREEN)
 
