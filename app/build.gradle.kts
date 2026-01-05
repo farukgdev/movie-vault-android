@@ -1,4 +1,7 @@
 @file:Suppress("UnstableApiUsage")
+
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -20,10 +23,37 @@ android {
 
         testInstrumentationRunner = "com.farukg.movievault.CustomTestRunner"
     }
+    val signingPropsFile = rootProject.file("signing.properties")
+    val signingProps =
+        Properties().apply {
+            if (signingPropsFile.exists()) signingPropsFile.inputStream().use(::load)
+        }
 
+    signingConfigs {
+        create("release") {
+            if (!signingPropsFile.exists()) {
+                throw GradleException("Missing signing.properties, needed for release signing.")
+            }
+
+            val storeFilePath = signingProps.getProperty("storeFile")
+            storeFile = file(storeFilePath)
+
+            storePassword = signingProps.getProperty("storePassword")
+            keyAlias = signingProps.getProperty("keyAlias")
+            keyPassword = signingProps.getProperty("keyPassword")
+
+            enableV1Signing = true
+            enableV2Signing = true
+        }
+    }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false
+
+            signingConfig = signingConfigs.getByName("release")
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
